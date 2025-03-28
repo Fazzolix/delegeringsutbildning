@@ -11,7 +11,6 @@ import hashlib
 from flask import Blueprint, request, jsonify
 from dotenv import load_dotenv
 import google.generativeai as genai
-from google.generativeai import types
 
 # Ladda miljövariabler
 load_dotenv()
@@ -29,9 +28,9 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
     print("Error: GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
-
-# Konfigurera Gemini-klienten
-client = genai.Client(api_key=GEMINI_API_KEY)
+else:
+    # Konfigurera Gemini API
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Global dictionary för att lagra chatt-sessioner per användare
 # Sparas som: {user_name: (session, prompt_hash)}
@@ -429,26 +428,6 @@ def build_system_instruction(user_answers):
     return system_instruction
 
 
-def build_generation_config(user_answers):
-    """
-    Skapar en dynamisk generation_config baserad på användarens svar.
-    
-    Args:
-        user_answers: Användarens svar på bakgrundsfrågor
-        
-    Returns:
-        Ett konfigurationsobjekt för Gemini API
-    """
-    system_instruction_text = build_system_instruction(user_answers)
-    return types.GenerateContentConfig(
-        system_instruction=system_instruction_text,
-        temperature=1,
-        top_p=0.95,
-        top_k=40,
-        max_output_tokens=8192
-    )
-
-
 def build_initial_history(user_answers, user_message, user_name):
     """
     Bygger initial historik med en välkomsttext anpassad utifrån användarens bakgrund.
@@ -491,6 +470,7 @@ def build_initial_history(user_answers, user_message, user_name):
         "Är du redo att börja? Skriv 'fortsätt' när du är redo i chattrutan."
     )
     
+    # Format för Gemini API
     history = [{
         "role": "user",
         "parts": [{
@@ -587,8 +567,24 @@ def chat():
     if user_message.strip().lower() == "start":
         history = build_initial_history(user_answers, user_message, user_name)
         try:
-            config = build_generation_config(user_answers)
-            session = client.chats.create(model='gemini-2.0-flash', config=config, history=history)
+            # Bygg system instruction
+            system_instruction_text = build_system_instruction(user_answers)
+            
+            # Skapa en generativ modell med rätt konfiguration
+            model = genai.GenerativeModel(
+                model_name='gemini-2.0-flash',
+                system_instruction=system_instruction_text,
+                generation_config={
+                    "temperature": 1,
+                    "top_p": 0.95,
+                    "top_k": 40,
+                    "max_output_tokens": 8192
+                }
+            )
+            
+            # Starta en chatt med modellen
+            session = model.start_chat(history=history)
+            
             # Spara sessionen tillsammans med det aktuella hashvärdet
             chat_sessions[user_name] = (session, current_hash)
         except Exception as e:
@@ -606,8 +602,25 @@ def chat():
             # Prompten har uppdaterats – skapa en ny session med den nya konfigurationen
             history = build_initial_history(user_answers, user_message, user_name)
             try:
-                config = build_generation_config(user_answers)
-                session = client.chats.create(model='gemini-2.0-flash', config=config, history=history)
+                # Bygg system instruction
+                system_instruction_text = build_system_instruction(user_answers)
+                
+                # Skapa en generativ modell med rätt konfiguration
+                model = genai.GenerativeModel(
+                    model_name='gemini-2.0-flash',
+                    system_instruction=system_instruction_text,
+                    generation_config={
+                        "temperature": 1,
+                        "top_p": 0.95,
+                        "top_k": 40,
+                        "max_output_tokens": 8192
+                    }
+                )
+                
+                # Starta en chatt med modellen
+                session = model.start_chat(history=history)
+                
+                # Spara sessionen tillsammans med det aktuella hashvärdet
                 chat_sessions[user_name] = (session, current_hash)
             except Exception as e:
                 logger.error("Fel vid skapande av chatt-session: %s", e)
@@ -616,8 +629,25 @@ def chat():
         # Ingen session finns – skapa en ny
         history = build_initial_history(user_answers, user_message, user_name)
         try:
-            config = build_generation_config(user_answers)
-            session = client.chats.create(model='gemini-2.0-flash', config=config, history=history)
+            # Bygg system instruction
+            system_instruction_text = build_system_instruction(user_answers)
+            
+            # Skapa en generativ modell med rätt konfiguration
+            model = genai.GenerativeModel(
+                model_name='gemini-2.0-flash',
+                system_instruction=system_instruction_text,
+                generation_config={
+                    "temperature": 1,
+                    "top_p": 0.95,
+                    "top_k": 40,
+                    "max_output_tokens": 8192
+                }
+            )
+            
+            # Starta en chatt med modellen
+            session = model.start_chat(history=history)
+            
+            # Spara sessionen tillsammans med det aktuella hashvärdet
             chat_sessions[user_name] = (session, current_hash)
         except Exception as e:
             logger.error("Fel vid skapande av chatt-session: %s", e)
@@ -625,8 +655,12 @@ def chat():
 
     # Skicka användarens meddelande
     try:
-        response = session.send_message(message=user_message)
-        ai_reply = response.text.strip() if response.text else ""
+        # Använd det nya API:et för att skicka meddelande
+        response = session.send_message(content=user_message)
+        
+        # Hämta textinnehållet från svaret
+        text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
+        ai_reply = "\n".join(text_parts).strip() if text_parts else ""
         
         # Fixa eventuella problem med svarsformateringen
         ai_reply = fix_ai_response(ai_reply)
@@ -684,8 +718,12 @@ def admin_prompt():
 if __name__ == '__main__':
     from flask import Flask
     from flask_cors import CORS
+    import os
     
     app = Flask(__name__)
     CORS(app)
     app.register_blueprint(ai_bp)
-    app.run(debug=True)
+    
+    # Använd PORT miljövariabeln för Render eller 5000 som standard
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
