@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Welcome.css';
 import ProgressBar from './ProgressBar';
+import API_ENDPOINTS from '../config/api';
 
 const Welcome = () => {
   const [name, setName] = useState('');
@@ -22,7 +23,7 @@ const Welcome = () => {
     
     setError('');
     // Skicka namn till backend
-    axios.post('http://127.0.0.1:5000/api/user', { name })
+    axios.post(API_ENDPOINTS.USER, { name })
       .then(response => {
          // Spara uppgifter i localStorage
          localStorage.setItem('userName', name);

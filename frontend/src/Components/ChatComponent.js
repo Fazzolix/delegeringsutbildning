@@ -1,4 +1,5 @@
 // frontend/src/Components/ChatComponent.js
+import API_ENDPOINTS from '../config/api';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { 
@@ -1010,7 +1011,7 @@ const ChatComponent = () => {
   // TTS-funktioner
   const getTTSUrl = (text) => {
     const encodedText = encodeURIComponent(text);
-    return `http://localhost:5000/api/tts-stream?text=${encodedText}`;
+    return `${API_ENDPOINTS.TTS_STREAM}?text=${encodedText}`;
   };
 
   const playTTS = useCallback((text) => {
@@ -1102,7 +1103,7 @@ const ChatComponent = () => {
   const startChat = useCallback(async () => {
     setAiIsThinking(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/chat', {
+      const response = await axios.post(API_ENDPOINTS.CHAT, {
         answers: { underskoterska, delegering },
         message: "start",
         name: userName
@@ -1156,7 +1157,7 @@ const ChatComponent = () => {
     setTimeout(scrollToBottom, 50);
     
     try {
-      const response = await axios.post('http://localhost:5000/api/chat', {
+      const response = await axios.post(API_ENDPOINTS.CHAT, {
         answers: { underskoterska, delegering },
         message: messageText,
         name: userName
