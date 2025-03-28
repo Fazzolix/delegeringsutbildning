@@ -10,8 +10,8 @@ import logging
 import hashlib
 from flask import Blueprint, request, jsonify
 from dotenv import load_dotenv
-import google.generativeai as genai  # KORREKT IMPORTSYNTAX
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai import types
 
 # Ladda miljövariabler
 load_dotenv()
