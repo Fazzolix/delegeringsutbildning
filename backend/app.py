@@ -3,10 +3,16 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import sqlite3
 from ai import ai_bp   # Your existing AI module
-from tts import tts_bp # Your TTS module
 from dotenv import load_dotenv
+import logging
 
-load_dotenv()  # Load environment variables from .env file
+# Konfigurera loggning
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Ladda miljövariabler
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -18,9 +24,26 @@ CORS(app, resources={r"/api/*": {"origins": [frontend_url, "http://localhost:300
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'database.db')
 
-# Register blueprints
+# Register AI blueprint
 app.register_blueprint(ai_bp)
-app.register_blueprint(tts_bp)
+
+# Försök registrera TTS-blueprint om det är möjligt
+try:
+    from tts import tts_bp
+    app.register_blueprint(tts_bp)
+    logger.info("TTS-funktionalitet tillgänglig")
+except ImportError:
+    logger.warning("TTS-modulen kunde inte laddas. TTS-funktionalitet kommer inte vara tillgänglig.")
+    
+    # Skapa en dummy TTS-endpoint för att förhindra frontend-fel
+    from flask import Blueprint
+    dummy_tts_bp = Blueprint('tts', __name__)
+    
+    @dummy_tts_bp.route('/api/tts-stream', methods=['GET'])
+    def dummy_tts_stream():
+        return jsonify({"error": "TTS-tjänsten är inte tillgänglig för tillfället"}), 503
+    
+    app.register_blueprint(dummy_tts_bp)
 
 # Initialize the database: Create the "users" table if it doesn't exist
 def init_db():
