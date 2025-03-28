@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.env
+venv/
+env/
+ENV/
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.DS_Store

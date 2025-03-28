@@ -1,0 +1,182 @@
+Delegeringsutbildning – En komplett guide för säker läkemedelstilldelning
+
+1. Introduktion & Bakgrund
+I Skövde kommuns vård- och omsorgsverksamhet utgör delegering en central process för att garantera att patienterna får den nödvändiga vården på ett säkert och effektivt sätt. Delegering innebär att en person med formell kompetens (t.ex. läkare eller sjuksköterska) överlåter en specifik medicinsk uppgift till en kollega som besitter den praktiska (reella) kompetensen. Detta är inte bara en överföring av uppgifter, utan en noggrant dokumenterad process där den delegerande parten alltid har det övergripande ansvaret för att uppgiften utförs korrekt.
+
+2. Rättsliga ramar och regler
+De juridiska riktlinjerna för delegering är omfattande och syftar till att skydda både patienten och personalen.
+
+    Patientsäkerhetslagen: Fastställer de grundläggande bestämmelserna för hälso- och sjukvården, inklusive principerna för delegering.
+    Socialstyrelsens föreskrifter: Exempelvis SOSFS 1997:14, som ger detaljerade anvisningar om delegering inom vård och tandvård.
+    Kommunala riktlinjer: Många kommuner, inklusive Skövde, har dessutom egna riktlinjer som kompletterar de nationella reglerna.
+
+3. Centrala principer för delegering
+För att delegering ska ske på ett säkert och effektivt sätt ska följande grundprinciper alltid vara i fokus:
+
+    Patientsäkerhet: Varje delegering måste sätta patientens säkerhet främst.
+    Kompetens: Den delegerande parten ska ha både den formella utbildningen och behörigheten, medan den som tar emot uppgiften måste visa att hen har den nödvändiga praktiska kunskapen.
+    Frivillighet: Ingen får tvingas att varken ta emot eller lämna ifrån sig en delegerad uppgift.
+    Dokumentation: Varje delegering ska tydligt dokumenteras – inklusive vem som delegerar, vem som mottar uppgiften, vilken uppgift det gäller samt eventuella instruktioner – och registreras i systemet Lifecare.
+
+4. Delegeringens giltighetstid
+Inom Skövde kommun är delegeringsbeslut alltid tidsbegränsade.
+
+    Tidsram: En delegering är normalt giltig i högst ett år, men kan sättas till en kortare period om exempelvis uppgiften är särskilt komplex eller om den delegerade är ny i rollen.
+    Uppföljning: Både den delegerande och den delegerade personalen kan via Lifecare följa hur lång tid som återstår.
+    Förnyelse & Återkallelse: Innan tidsgränsen nås ska den delegerade påminna den ansvariga om kommande utgång. Om behovet kvarstår och kompetensen är fortsatt tillräcklig kan en ny delegering beslutas. Samtidigt kan delegeringen återkallas om omständigheterna förändras.
+
+5. Ordinationshandling – Grunden för säker medicinering
+Varje patient har en ordinationshandling – en detaljerad läkemedelslista som fungerar som ett verktyg för säker medicinadministration. Den innehåller:
+
+    Medicinnamn: Både det generiska namnet och eventuellt varumärke.
+    Dosering och administreringsinstruktioner: Exakt hur mycket och när läkemedlet ska intas.
+    Behandlingstid: Den angivna perioden för medicineringen.
+    Ordinationshandlingen är central för att undvika felaktig medicinering och måste alltid vara uppdaterad. Om det finns diskrepanser mellan listan och den faktiska medicineringen ska sjuksköterskan omedelbart underrättas.
+
+6. Läkemedelstilldelning och basala hygienrutiner
+Läkemedelstilldelning är en av de vanligaste delegerade uppgifterna.
+
+    Administreringsvägar: Läkemedel kan ges via munnen (peroralt), injektion, transdermalt (t.ex. plåster) med flera – valet beror på läkemedlets egenskaper och önskad effekt.
+    Hygien: Innan och efter hantering av läkemedel ska du alltid tvätta händerna noggrant för att upprätthålla en hög patientsäkerhet.
+
+7. Vanliga läkemedelsgrupper
+Följande grupper är vanligt förekommande inom kommunal vård:
+
+    Smärtstillande medel: T.ex. Alvedon, Panodil, Morfin, Oxikodon.
+    Lugnande medel: T.ex. Oxascand, Sobril.
+    Sömnmedel: T.ex. Zopiklon, Stilnoct.
+    Hjärt- och kärlmedel: T.ex. Enalapril, Metoprolol.
+    Blodförtunnande medel: T.ex. Waran, Trombyl, Xarelto, Eliquis, Fragmin.
+    Blodsockerreglerande medel: T.ex. Metformin, Insulin.
+    Inhalationsmedel: T.ex. Pulmicort, Atrovent, Symbicort, Bricanyl.
+    Urindrivande medel: T.ex. Furix, Impugan.
+    Tarmreglerande medel: T.ex. Laktulos, Duphalac, Movicol, Laktipex, Forlax, Omnilax.
+    Laxermedel: T.ex. Cilaxoraldroppar, Microlax, Klyx.
+
+8. Viktiga överväganden vid läkemedelsordination
+Vissa läkemedel kräver särskild uppmärksamhet:
+
+    Blodförtunnande läkemedel: Patienter är extra benägna att blöda; Waran ska exempelvis hanteras separat från dospåsen.
+    Paracetamol: Överskrid aldrig rekommenderad dos då det kan leda till allvarliga leverskador.
+    NSAID-preparat: Dessa, såsom Naproxen, Ipren och Voltaren, kan ge biverkningar, särskilt hos äldre, och bör användas med försiktighet.
+
+9. Administrationsformer för läkemedel
+
+Oral administrering
+
+    Tabletter: Finns i olika varianter (brustabletter, tuggtabletter, sugtabletter, depåtabletter m.fl.).
+    Kapslar: Ska sväljas hela med rikligt med vätska.
+    Granulat och pulver: Kan blandas i mat eller lösas i vätska.
+    Mixturer och droppar: Flytande former som tas via munnen.
+    Viktigt: Intag ska ske med tillräcklig vätska och i sittande ställning; krossning av tabletter ska ske enligt sjuksköterskans anvisningar.
+
+Inhalation
+
+    Inhalatorer: T.ex. Diskhaler, Turbohaler med pulver.
+    Inhalationsvätskor och spray: Ges antingen som flytande form eller spray under tungan.
+    Viktigt: Efter inhalation av kortison ska patienten skölja munnen för att undvika svampinfektion.
+
+Rektal administrering
+
+    Vätskor och suppositorier: Förs in i ändtarmen.
+    Obs: Vid patienter med stomi ges endast lavemang efter läkarordination.
+
+Vaginal administrering
+
+    Krämer, geler, vaginaltabletter: Används med särskilda appliceringsredskap.
+
+Transdermal administrering
+
+    Plåster: Används vid exempelvis hormonbehandling eller långvarig smärtlindring.
+
+Administrering i ögon och öron
+
+    Ögondroppar, ögonsalvor: För behandling av ögonbesvär.
+    Örondroppar, öronsalvor: För behandling av öronproblem.
+
+Topikala former
+
+    Salvor, krämer och gel: Används för lokal behandling av hudtillstånd.
+
+10. Hantering av receptfria läkemedel och naturläkemedel
+Endast läkemedel som uttryckligen är ordinerade och anges i ordinationshandlingen får ges. Detta för att säkerställa att patienten inte får fel eller onödiga mediciner.
+
+11. Praktiska instruktioner för vård- och omsorgspersonal
+Vid läkemedelstilldelning bör du alltid:
+
+    Bekräfta patientens identitet (namn och födelsedatum).
+    Noga granska ordinationshandlingen för att identifiera läkemedelsnamn, form, styrka och dosering.
+    Säkerställa att rätt administreringssätt och tidpunkt följs.
+    Jämföra den faktiska dosen med den som anges i ordinationshandlingen.
+    Signera att läkemedlet har givits korrekt i **Lifecare utförare**. Om du givit narkotikaklassade läkemedel signeras detta i **MCSS**.
+
+12. Hur man läser och tolkar en ordinationshandling
+En ordinationshandling innehåller flera viktiga delar:
+
+    Patientinformation: Namn och födelsedatum för att säkerställa att rätt patient behandlas.
+    Förskrivare: Information om den läkare eller sjuksköterska som har ordinerat läkemedlet.
+    Läkemedelsinformation: Inkluderar läkemedlets namn, form, styrka, dosering, administreringsväg samt tidpunkt för intag.
+    Behandlingstid och ändringar: Tydliga angivelser om hur länge medicineringen ska pågå samt eventuella uppdateringar.
+    Signatur: Datum och underskrift från den ansvariga förskrivaren.
+    Det är avgörande att du noggrant tolkar denna handling för att undvika misstag vid administreringen.
+
+13. Dosförpackade läkemedel
+Vid dosförpackning packar apoteket patientens läkemedel i små påsar, en för varje intagstillfälle. Varje påse är tydligt märkt med patientens namn, födelsedatum, innehåll och tidpunkt. Det är viktigt att du som vårdpersonalen kontrollerar att dospåsens innehåll stämmer överens med ordinationshandlingen innan läkemedlen ges.
+
+14. Dosetter – organisering och säkerhet
+Dosetter är praktiska hjälpmedel för att strukturera och administrera läkemedel:
+
+    Indelning: Vanligtvis delas dosetten upp i fack för varje dag (måndag till söndag) samt olika tidpunkter (morgon, middag, kväll, natt).
+    Fyllning: Sjuksköterskan fyller dosetten med rätt läkemedel enligt ordinationshandlingen.
+    Typer:
+        Röda dosetter används för läkemedel som ska ges regelbundet.
+        Blå dosetter är avsedda för narkotikaklassade läkemedel som ges vid behov.
+        Dosetten är personlig och ska alltid jämföras med ordinationshandlingen – avvikelser ska omedelbart rapporteras.
+
+15. Läkemedel vid behov
+Läkemedel som ges "vid behov" (såsom smärtstillande, lugnande eller sömnmedel) får aldrig administreras utan att en sjuksköterska först bedömt patientens tillstånd, du måste alltså alltid kontakta sjuksköterskan innan du ger läkemedel vid behov. Dessa läkemedel kan vara förpackade i dosett, medicinmugg eller ges i originalförpackning. Efter intag ska läkemedelsadministrationen dokumenteras noggrant i Lifecare eller MCSS (särskilt vid narkotikaklassade preparat), och effekten utvärderas för att säkerställa rätt behandling.
+
+16. Patientbundna läkemedelsskåp
+Övervakningen av patientbundna läkemedelsskåp är delegerad till vård- och omsorgspersonalen. Detta innebär att du:
+
+    Håller skåpet rent och organiserat.
+    Kontinuerligt kontrollerar att läkemedlen är aktuella och att inga produkter har passerat utgångsdatum.
+    Vid behov av påfyllnad, omedelbart meddelar sjuksköterskan med tydlig information om vilket läkemedel som ska fyllas på.
+
+17. Steg för kontroll av blodsocker
+Blodsockerkontroller tas på patienter med diabets för att nivån av socker i blodet för att på så sätt upptäcka och följa upp diabetes. Anpassa diabetesbehandling. Förebygga komplikationer. Upptäcka och hantera högt eller lågt blodsocker.För att genomföra en säker blodsockerkontroll, följ dessa steg:
+
+    Förberedelser: Tvätta händerna noggrant och samla allt nödvändigt material (blodsockermätare, teststickor, lansett, pappersstuss och eventuellt desinfektionsmedel).
+    Kontroll: Kontrollera att teststickornas utgångsdatum inte har passerat.
+    Utförande:
+        För in teststickan i mätaren.
+        Välj en lämplig plats på fingret (undvik områden med ärr eller tidigare stick).
+        Använd lansetten för att göra ett litet stick.
+        Torka bort den första bloddroppen med en pappersstuss.
+        Applicera blod på teststickan och vänta på att mätaren visar resultatet.
+    Efterarbete: Kassera teststickan på ett säkert sätt, stoppa blödningen med en bomullstuss, och rengör mätaren enligt anvisningarna.
+
+18. Riktlinjer för hantering av kompressionsstrumpor
+Kompressionsstrumpor (även kallade stödstrumpor) används för att förbättra blodcirkulationen och minska risken för blodproppar samt svullnad.
+
+    Anpassning: Det är avgörande att välja rätt storlek och tryckklass.
+    Påtagning:
+        Se till att huden är torr och ren efter noggrann handtvätt.
+        Vänd strumpan ut och in (undantaget hälpartiet).
+        Trä på strumpan över foten och kontrollera att hälen sitter korrekt.
+        Dra upp strumpan jämnt längs benet utan att den vrider sig, och undvik att dra i resåren.
+        Släta ut eventuella veck för en optimal passform.
+    Avtagning:
+        Greppa strumpan i toppen utan att dra i resåren.
+        Ta ner strumpan långsamt och försiktigt.
+        Vänd strumpan rätt efter avtagning.
+        Vid obehag, såsom smärta eller irritation, ska patienten instrueras att omedelbart ta av strumpan och kontakta sjuksköterskan.
+
+19. Kommunikation med hjälp av SBAR
+SBAR är ett strukturerat verktyg för att säkerställa att kommunikationen mellan vårdgivare är tydlig och komplett. Använd följande struktur:
+
+    Situation (S): Beskriv kortfattat vad som pågår och vilket problem som föreligger.
+    Bakgrund (B): Ge en översikt av patientens historik och relevanta händelser.
+    Aktuellt tillstånd (A): Redogör för patientens nuvarande status, inklusive vitala parametrar.
+    Rekommendation (R): Ge en tydlig rekommendation om vilka åtgärder som bör vidtas.
+    Med SBAR säkerställer du att all nödvändig information överförs på ett strukturerat och effektivt sätt, vilket underlättar beslutsfattande.

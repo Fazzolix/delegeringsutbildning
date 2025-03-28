@@ -1,0 +1,167 @@
+/* Welcome.css */
+.welcome-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+}
+
+.welcome-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  font-family: 'Roboto', sans-serif;
+  border: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.welcome-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.18);
+}
+
+.welcome-title {
+  font-size: 2.2em;
+  margin-bottom: 0.8em;
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.welcome-info {
+  background-color: #f8f9fa;
+  border-left: 4px solid #4e73df;
+  padding: 15px;
+  margin-bottom: 25px;
+  text-align: left;
+  border-radius: 0 8px 8px 0;
+  color: #5a6270;
+  line-height: 1.6;
+}
+
+.welcome-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-input {
+  padding: 14px;
+  border: 2px solid #e6e8eb;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 1em;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.welcome-input:focus {
+  border-color: #4e73df;
+  box-shadow: 0 0 0 3px rgba(78, 115, 223, 0.25);
+  outline: none;
+}
+
+.question-group {
+  margin-bottom: 25px;
+  text-align: left;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.question-group p {
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ccc;
+  border-radius: 50%;
+  margin-right: 10px;
+  position: relative;
+  cursor: pointer;
+}
+
+.radio-option input[type="radio"]:checked {
+  border-color: #4e73df;
+}
+
+.radio-option input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  background-color: #4e73df;
+  border-radius: 50%;
+}
+
+.radio-option label {
+  font-size: 1em;
+  color: #5a6270;
+}
+
+.welcome-button {
+  padding: 14px;
+  background-color: #4e73df;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 4px 6px rgba(78, 115, 223, 0.25);
+}
+
+.welcome-button:hover {
+  background-color: #3a5dd0;
+  transform: translateY(-2px);
+}
+
+.welcome-button:active {
+  transform: translateY(0);
+}
+
+.welcome-error {
+  color: #e74a3b;
+  margin-top: 15px;
+  font-size: 0.9em;
+  background-color: rgba(231, 74, 59, 0.1);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.welcome-loading-text {
+  font-size: 1.2em;
+  margin-bottom: 20px;
+  color: #4e73df;
+  font-weight: 500;
+}
+
+/* Customize progress bar colors to match the new design */
+.progress-bar-container {
+  height: 10px;
+  background-color: #e6e8eb;
+  border-radius: 5px;
+  margin: 20px auto;
+}
+
+.progress-bar {
+  background: linear-gradient(90deg, #4e73df, #36b9cc);
+}

@@ -1,0 +1,129 @@
+/* App.css */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  height: 100vh;
+  width: 100vw;
+  overflow-x: hidden;
+}
+
+.App {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 100vw;
+}
+
+/* Modern scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.8);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #a0aec0;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+/* Responsiva justeringar */
+@media (max-width: 768px) {
+  body {
+    background: #f5f7fa;
+  }
+  
+  .App {
+    padding: 0;
+  }
+}
+
+/* För att fixa vissa Material-UI stilar */
+.MuiButton-root {
+  text-transform: none !important;
+}
+
+/* För bilder i Markdown */
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+/* För code blocks i Markdown */
+pre {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 10px 0;
+  border-left: 3px solid #4e73df;
+}
+
+code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* För att förbättra utseendet på Markdown-innehåll */
+blockquote {
+  margin: 10px 0;
+  padding: 10px 20px;
+  border-left: 4px solid #4e73df;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 0 8px 8px 0;
+}
+
+/* Styling för listor i Markdown */
+ul, ol {
+  padding-left: 20px;
+  margin: 10px 0;
+}
+
+li {
+  margin: 5px 0;
+}
+
+/* Huvudrubriker i Markdown */
+h1, h2, h3, h4, h5, h6 {
+  color: #2c3e50;
+  margin: 15px 0 10px 0;
+}
+
+/* För att förbättra utseendet på tabeller */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 15px 0;
+  overflow-x: auto;
+  display: block;
+}
+
+th, td {
+  border: 1px solid #e2e8f0;
+  padding: 10px;
+  text-align: left;
+}
+
+th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}

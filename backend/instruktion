@@ -1,0 +1,7 @@
+cd /home/fredrik-linux-laptop/my_project/backend
+source venv/bin/activate
+python app.py
+
+cd /home/fredrik-linux-laptop/my_project/frontend
+npm start
+
