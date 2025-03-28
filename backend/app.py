@@ -1,22 +1,28 @@
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import sqlite3
-from ai import ai_bp   # Din befintliga AI-modul
-from tts import tts_bp # Vår nya TTS-modul
+from ai import ai_bp   # Your existing AI module
+from tts import tts_bp # Your TTS module
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-CORS(app)
 
-# Definiera en absolut sökväg till databasen
+# Configure CORS to allow requests from frontend
+frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+CORS(app, resources={r"/api/*": {"origins": [frontend_url, "http://localhost:3000"]}})
+
+# Define an absolute path to the database
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'database.db')
 
-# Registrera blueprints
+# Register blueprints
 app.register_blueprint(ai_bp)
 app.register_blueprint(tts_bp)
 
-# Initiera databasen: Skapa tabellen "users" om den inte redan finns
+# Initialize the database: Create the "users" table if it doesn't exist
 def init_db():
     with sqlite3.connect(db_path) as conn:
         c = conn.cursor()
@@ -30,24 +36,29 @@ def init_db():
 
 init_db()
 
+# Serve static files
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
+
 @app.route('/')
 def index():
-    return jsonify({"message": "Hello, world!"})
+    return jsonify({"message": "Backend API is running!"})
 
-# API-endpoint för att spara användarens namn
+# API endpoint to save the user's name
 @app.route('/api/user', methods=['POST'])
 def save_user():
     data = request.get_json()
     name = data.get('name')
     if not name:
-        return jsonify({'error': 'Namn måste anges'}), 400
+        return jsonify({'error': 'Name must be provided'}), 400
 
     with sqlite3.connect(db_path) as conn:
         c = conn.cursor()
         c.execute('INSERT INTO users (name) VALUES (?)', (name,))
         conn.commit()
 
-    return jsonify({'message': 'Namnet sparades!'})
+    return jsonify({'message': 'Name saved successfully!'})
 
 if __name__ == '__main__':
     app.run(debug=True)
