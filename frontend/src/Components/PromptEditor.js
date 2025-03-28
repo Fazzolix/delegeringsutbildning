@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './PromptEditor.css';
+import API_ENDPOINTS from '../config/api';
 
 const PromptEditor = () => {
   const [promptConfig, setPromptConfig] = useState([]);
@@ -16,7 +17,7 @@ const PromptEditor = () => {
     const fetchPromptConfig = async () => {
       try {
         setIsLoading(true);
-        const response = await axios.get('http://localhost:5000/api/admin/prompt');
+        const response = await axios.get(API_ENDPOINTS.PROMPT_EDITOR);
         setPromptConfig(response.data.prompt_config);
         setOriginalConfig(JSON.parse(JSON.stringify(response.data.prompt_config)));
         setIsLoading(false);
@@ -83,7 +84,7 @@ const PromptEditor = () => {
 
   const handleSave = async () => {
     try {
-      await axios.post('http://localhost:5000/api/admin/prompt', {
+      await axios.post(API_ENDPOINTS.PROMPT_EDITOR, {
         prompt_config: promptConfig
       });
       showNotification('success', 'Promptkonfigurationen har sparats');
