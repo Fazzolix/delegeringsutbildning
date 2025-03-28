@@ -61,4 +61,6 @@ def save_user():
     return jsonify({'message': 'Name saved successfully!'})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Använd PORT miljövariabeln för Render eller 10000 som standard
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=True)
