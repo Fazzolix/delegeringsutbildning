@@ -10,6 +10,7 @@ import {
   FormControl,
   FormControlLabel,
   Radio,
+  RadioGroup, // Added for single-choice radio buttons
   Checkbox,
   FormGroup,
   Paper,
@@ -19,389 +20,440 @@ import {
   CardContent,
   CardHeader,
   Avatar,
-  Chip
+  Chip,
+  CircularProgress // Added for button loading state
 } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
 import './ChatComponent.css';
 
-// --- Helper Components (unchanged logic, just ensure they exist) ---
+// --- Helper Components (Updated props and added null checks) ---
 
-// Multiple choice component
 const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
-  const [selectedOptions, setSelectedOptions] = useState({});
+    const [selectedOptions, setSelectedOptions] = useState({});
+    const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = (id) => {
-    if (disabled) return;
+    // Reset local state if the question changes (important if the same component instance is reused)
+    useEffect(() => {
+        setSelectedOptions({});
+        setSubmitted(false);
+    }, [question]);
 
-    if (question.multiSelect) {
-      setSelectedOptions(prev => ({
-        ...prev,
-        [id]: !prev[id]
-      }));
-    } else {
-      const newSelection = {};
-      newSelection[id] = true;
-      setSelectedOptions(newSelection);
+    if (!question || !Array.isArray(question.options)) {
+        console.error("MultipleChoiceQuestion received invalid data:", question);
+        return <Alert severity="warning">Frågedata saknas eller är ogiltig.</Alert>;
     }
-  };
 
-  const handleSubmit = () => {
-    if (disabled) return;
+    const handleChange = (id) => {
+        if (disabled || submitted) return;
 
-    const selected = Object.keys(selectedOptions).filter(id => selectedOptions[id]);
-    const selectedLabels = selected.map(id => {
-      const option = question.options.find(opt => opt.id === id);
-      return option ? option.text : '';
-    });
+        if (question.multiSelect) {
+        setSelectedOptions(prev => ({
+            ...prev,
+            [id]: !prev[id]
+        }));
+        } else {
+        const newSelection = {};
+        newSelection[id] = true; // Only one can be selected
+        setSelectedOptions(newSelection);
+        }
+    };
 
-    // Send back the text of the selected option(s)
-    onAnswer(selectedLabels.join(', '));
-  };
+    const handleSubmit = () => {
+        if (disabled || submitted || isSubmitting) return;
 
-  return (
-    <div className={`question-container multiple-choice ${disabled ? 'disabled-question' : ''}`}>
-      <Typography variant="h6" className="question-title">{question.text}</Typography>
-      <FormGroup>
-        {question.options.map((option) => (
-          <FormControlLabel
-            key={option.id}
-            control={
-              question.multiSelect ? (
-                <Checkbox
-                  checked={!!selectedOptions[option.id]}
-                  onChange={() => handleChange(option.id)}
-                  disabled={isSubmitting || disabled}
+        const selectedIds = Object.keys(selectedOptions).filter(id => selectedOptions[id]);
+        if (selectedIds.length === 0) return; // Don't submit if nothing is selected
+
+        setSubmitted(true); // Mark as submitted locally
+
+        const selectedLabels = selectedIds.map(id => {
+        const option = question.options.find(opt => opt.id === id);
+        return option ? option.text : '';
+        });
+
+        // Send back the text of the selected option(s)
+        onAnswer(selectedLabels.join(', '));
+    };
+
+    const ControlComponent = question.multiSelect ? Checkbox : Radio;
+    const GroupComponent = question.multiSelect ? FormGroup : RadioGroup;
+
+    return (
+        <div className={`question-container multiple-choice ${disabled || submitted ? 'disabled-question' : ''}`}>
+        <Typography variant="h6" className="question-title">{question.text}</Typography>
+        <GroupComponent>
+            {question.options.map((option) => (
+            <FormControlLabel
+                key={option.id}
+                control={
+                <ControlComponent
+                    checked={!!selectedOptions[option.id]}
+                    onChange={() => handleChange(option.id)}
+                    disabled={isSubmitting || disabled || submitted}
                 />
-              ) : (
-                <Radio
-                  checked={!!selectedOptions[option.id]}
-                  onChange={() => handleChange(option.id)}
-                  disabled={isSubmitting || disabled}
-                />
-              )
-            }
-            label={option.text}
-            // Make label itself non-interactive if disabled
-            sx={{ cursor: disabled ? 'default' : 'pointer' }}
-          />
-        ))}
-      </FormGroup>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleSubmit}
-        disabled={isSubmitting || Object.keys(selectedOptions).filter(k => selectedOptions[k]).length === 0 || disabled}
-        className="question-submit-btn"
-        sx={{ opacity: disabled ? 0.6 : 1 }}
-      >
-        Svara
-      </Button>
-    </div>
-  );
-};
-
-// Matching question component
-const MatchingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
-  const [matches, setMatches] = useState({});
-
-  const handleMatch = (itemId, matchId) => {
-    if (disabled) return;
-    setMatches(prev => ({ ...prev, [itemId]: matchId }));
-  };
-
-  const handleSubmit = () => {
-    if (disabled) return;
-    const matchResponse = Object.entries(matches).map(([itemId, matchId]) => {
-      const item = question.items.find(i => i.id === itemId);
-      const match = question.matches.find(m => m.id === matchId);
-      return `${item?.text || ''} → ${match?.text || ''}`;
-    }).join(' | ');
-    onAnswer(matchResponse);
-  };
-
-  const itemsMatched = Object.keys(matches).length === question.items.length;
-
-  return (
-    <div className={`question-container matching-question ${disabled ? 'disabled-question' : ''}`}>
-      <Typography variant="h6" className="question-title">{question.text}</Typography>
-      <div className="matching-grid">
-        <Grid container spacing={2}>
-          {question.items.map((item) => (
-            <Grid item xs={12} key={item.id}>
-              <Paper elevation={disabled ? 0 : 2} className="matching-item">
-                <Typography variant="body1" className="item-text">{item.text}</Typography>
-                <FormControl fullWidth>
-                  <select
-                    value={matches[item.id] || ''}
-                    onChange={(e) => handleMatch(item.id, e.target.value)}
-                    disabled={isSubmitting || disabled}
-                    className="matching-select"
-                    style={{ cursor: disabled ? 'default' : 'pointer' }}
-                  >
-                    <option value="">Välj matchande alternativ...</option>
-                    {question.matches.map((match) => (
-                      <option
-                        key={match.id}
-                        value={match.id}
-                        disabled={(Object.values(matches).includes(match.id) && matches[item.id] !== match.id) || disabled}
-                      >
-                        {match.text}
-                      </option>
-                    ))}
-                  </select>
-                </FormControl>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
-      </div>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleSubmit}
-        disabled={isSubmitting || !itemsMatched || disabled}
-        className="question-submit-btn"
-        sx={{ opacity: disabled ? 0.6 : 1 }}
-      >
-        Svara
-      </Button>
-    </div>
-  );
-};
-
-// Ordering question component
-const OrderingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
-  // Initialize state with items in their initial (likely random) order
-  const [orderedItems, setOrderedItems] = useState([...question.items]);
-
-  const moveItem = (index, direction) => {
-    if (disabled) return;
-    if ((direction < 0 && index === 0) || (direction > 0 && index === orderedItems.length - 1)) {
-      return;
-    }
-    const newOrder = [...orderedItems];
-    [newOrder[index], newOrder[index + direction]] = [newOrder[index + direction], newOrder[index]]; // Swap
-    setOrderedItems(newOrder);
-  };
-
-  const handleSubmit = () => {
-    if (disabled) return;
-    // Send back the ordered text items joined by an arrow
-    const orderedResponse = orderedItems.map(item => item.text).join(' → ');
-    onAnswer(orderedResponse);
-  };
-
-  return (
-    <div className={`question-container ordering-question ${disabled ? 'disabled-question' : ''}`}>
-      <Typography variant="h6" className="question-title">{question.text}</Typography>
-      <div className="ordering-list">
-        {orderedItems.map((item, index) => (
-          <Paper key={item.id} elevation={disabled ? 0 : 2} className="ordering-item">
-            <Typography variant="body1">{item.text}</Typography>
-            <div className="ordering-controls">
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={index === 0 || isSubmitting || disabled}
-                onClick={() => moveItem(index, -1)}
-                sx={{ opacity: disabled ? 0.6 : 1, cursor: disabled ? 'default' : 'pointer' }}
-              >
-                ↑
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={index === orderedItems.length - 1 || isSubmitting || disabled}
-                onClick={() => moveItem(index, 1)}
-                sx={{ opacity: disabled ? 0.6 : 1, cursor: disabled ? 'default' : 'pointer' }}
-              >
-                ↓
-              </Button>
-            </div>
-          </Paper>
-        ))}
-      </div>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleSubmit}
-        disabled={isSubmitting || disabled}
-        className="question-submit-btn"
-        sx={{ opacity: disabled ? 0.6 : 1 }}
-      >
-        Svara
-      </Button>
-    </div>
-  );
-};
-
-// Scenario component
-const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }) => {
-    if (!scenario || !scenario.options) {
-        console.error("Scenario data is missing or invalid:", scenario);
-        return <Alert severity="error">Kunde inte ladda scenariot.</Alert>;
-    }
-  return (
-    <Card className={`scenario-card ${disabled ? 'disabled-scenario' : ''}`}>
-      <CardHeader
-        title={scenario.title || "Patientsituation"}
-        className="scenario-header"
-      />
-      <CardContent>
-        <Typography variant="body1" className="scenario-description">
-          {scenario.description}
-        </Typography>
-        <div className="scenario-options">
-          {scenario.options.map((option, index) => (
-            <Button
-              key={option.value || index} // Use value if available, otherwise index
-              variant="outlined"
-              color="primary"
-              fullWidth
-              disabled={isSubmitting || disabled}
-              onClick={() => !disabled && onAnswer(option.label)} // Send label as the answer
-              className="scenario-option-btn"
-              sx={{ opacity: disabled ? 0.7 : 1, cursor: disabled ? 'default' : 'pointer' }}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-// Roleplay component
-const RoleplayDialog = ({ roleplay, disabled = false }) => {
-    if (!roleplay || !roleplay.dialogue) {
-        console.error("Roleplay data is missing or invalid:", roleplay);
-        return <Alert severity="error">Kunde inte ladda rollspelet.</Alert>;
-    }
-  const { title, scenario, dialogue, learningPoints } = roleplay;
-  const roleStyles = {
-    "Sjuksköterska": { bgcolor: "#4caf50", initials: "S" },
-    "Sjuksköterska Sara": { bgcolor: "#4caf50", initials: "S" },
-    "Läkare": { bgcolor: "#2196f3", initials: "L" },
-    "Patient": { bgcolor: "#ff9800", initials: "P" },
-    "Undersköterska": { bgcolor: "#9c27b0", initials: "U" },
-    "Undersköterska (du)": { bgcolor: "#9c27b0", initials: "U" }
-  };
-  const getInitials = (role) => (roleStyles[role] ? roleStyles[role].initials : role.charAt(0));
-  const getColor = (role) => (roleStyles[role] ? roleStyles[role].bgcolor : "#607d8b");
-
-  return (
-    <div className={`roleplay-container ${disabled ? 'disabled-roleplay' : ''}`}>
-      <div className="roleplay-header">
-        <Typography variant="h6">{title}</Typography>
-        <Typography variant="body2" className="roleplay-scenario">{scenario}</Typography>
-      </div>
-      <div className="dialogue-container">
-        {dialogue.map((entry, index) => (
-          <div key={index} className={`dialogue-entry ${entry.role.includes('(du)') ? 'dialogue-user' : ''}`}>
-            <Avatar
-              className="dialogue-avatar"
-              sx={{ bgcolor: getColor(entry.role), opacity: disabled ? 0.8 : 1 }}
-            >
-              {getInitials(entry.role)}
-            </Avatar>
-            <div className="dialogue-content">
-              <Typography variant="subtitle2" className="dialogue-role">{entry.role}</Typography>
-              <Typography variant="body1" className="dialogue-message">{entry.message}</Typography>
-            </div>
-          </div>
-        ))}
-      </div>
-      {learningPoints && learningPoints.length > 0 && (
-        <div className="learning-points">
-          <Typography variant="subtitle1" className="learning-points-header">Viktiga lärdomar:</Typography>
-          <ul className="learning-points-list">
-            {learningPoints.map((point, index) => (
-              <li key={index}><Typography variant="body2">{point}</Typography></li>
+                }
+                label={option.text}
+                sx={{ cursor: (disabled || submitted) ? 'default' : 'pointer' }}
+            />
             ))}
-          </ul>
+        </GroupComponent>
+        <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={isSubmitting || Object.keys(selectedOptions).filter(k => selectedOptions[k]).length === 0 || disabled || submitted}
+            className="question-submit-btn"
+            sx={{ mt: 2, opacity: (disabled || submitted) ? 0.6 : 1 }} // Added margin-top
+        >
+            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Svara'}
+        </Button>
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
-// Feedback component
+const MatchingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
+    const [matches, setMatches] = useState({});
+    const [submitted, setSubmitted] = useState(false);
+
+    useEffect(() => {
+        setMatches({});
+        setSubmitted(false);
+    }, [question]);
+
+    if (!question || !Array.isArray(question.items) || !Array.isArray(question.matches)) {
+        console.error("MatchingQuestion received invalid data:", question);
+        return <Alert severity="warning">Frågedata saknas eller är ogiltig.</Alert>;
+    }
+
+    const handleMatch = (itemId, matchId) => {
+        if (disabled || submitted) return;
+        setMatches(prev => ({ ...prev, [itemId]: matchId }));
+    };
+
+    const handleSubmit = () => {
+        if (disabled || submitted || isSubmitting) return;
+        setSubmitted(true);
+        const matchResponse = Object.entries(matches).map(([itemId, matchId]) => {
+            const item = question.items.find(i => i.id === itemId);
+            const match = question.matches.find(m => m.id === matchId);
+            return `${item?.text || `Item ${itemId}`} → ${match?.text || `Match ${matchId}`}`;
+        }).join(' | ');
+        onAnswer(matchResponse);
+    };
+
+    const allItemsMatched = question.items.length > 0 && Object.keys(matches).length === question.items.length;
+
+    return (
+        <div className={`question-container matching-question ${disabled || submitted ? 'disabled-question' : ''}`}>
+        <Typography variant="h6" className="question-title">{question.text}</Typography>
+        <div className="matching-grid">
+            <Grid container spacing={2}>
+            {question.items.map((item) => (
+                <Grid item xs={12} key={item.id}>
+                <Paper elevation={disabled || submitted ? 0 : 1} className="matching-item">
+                    <Typography variant="body1" className="item-text">{item.text}</Typography>
+                    <FormControl fullWidth>
+                    <select
+                        value={matches[item.id] || ''}
+                        onChange={(e) => handleMatch(item.id, e.target.value)}
+                        disabled={isSubmitting || disabled || submitted}
+                        className="matching-select"
+                        style={{ cursor: disabled || submitted ? 'default' : 'pointer' }}
+                    >
+                        <option value="">Välj...</option>
+                        {question.matches.map((match) => (
+                        <option key={match.id} value={match.id}>
+                            {match.text}
+                        </option>
+                        ))}
+                    </select>
+                    </FormControl>
+                </Paper>
+                </Grid>
+            ))}
+            </Grid>
+        </div>
+        <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !allItemsMatched || disabled || submitted}
+            className="question-submit-btn"
+            sx={{ mt: 2, opacity: (disabled || submitted) ? 0.6 : 1 }}
+        >
+            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Svara'}
+        </Button>
+        </div>
+    );
+};
+
+const OrderingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
+    const [orderedItems, setOrderedItems] = useState(() => [...(question?.items || [])]);
+    const [submitted, setSubmitted] = useState(false);
+
+     useEffect(() => {
+        setOrderedItems([...(question?.items || [])]);
+        setSubmitted(false);
+    }, [question]);
+
+    if (!question || !Array.isArray(question.items)) {
+        console.error("OrderingQuestion received invalid data:", question);
+        return <Alert severity="warning">Frågedata saknas eller är ogiltig.</Alert>;
+    }
+
+    const moveItem = (index, direction) => {
+        if (disabled || submitted) return;
+        if ((direction < 0 && index === 0) || (direction > 0 && index === orderedItems.length - 1)) {
+        return;
+        }
+        const newOrder = [...orderedItems];
+        [newOrder[index], newOrder[index + direction]] = [newOrder[index + direction], newOrder[index]]; // Swap
+        setOrderedItems(newOrder);
+    };
+
+    const handleSubmit = () => {
+        if (disabled || submitted || isSubmitting) return;
+        setSubmitted(true);
+        const orderedResponse = orderedItems.map(item => item.text).join(' → ');
+        onAnswer(orderedResponse);
+    };
+
+    return (
+        <div className={`question-container ordering-question ${disabled || submitted ? 'disabled-question' : ''}`}>
+        <Typography variant="h6" className="question-title">{question.text}</Typography>
+        <div className="ordering-list">
+            {orderedItems.map((item, index) => (
+            <Paper key={item.id} elevation={disabled || submitted ? 0 : 1} className="ordering-item">
+                <Typography variant="body1">{item.text}</Typography>
+                <div className="ordering-controls">
+                <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={index === 0 || isSubmitting || disabled || submitted}
+                    onClick={() => moveItem(index, -1)}
+                    sx={{ opacity: (disabled || submitted) ? 0.6 : 1, cursor: (disabled || submitted) ? 'default' : 'pointer' }}
+                    aria-label={`Flytta upp ${item.text}`}
+                >
+                    ↑
+                </Button>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={index === orderedItems.length - 1 || isSubmitting || disabled || submitted}
+                    onClick={() => moveItem(index, 1)}
+                    sx={{ opacity: (disabled || submitted) ? 0.6 : 1, cursor: (disabled || submitted) ? 'default' : 'pointer' }}
+                    aria-label={`Flytta ner ${item.text}`}
+                >
+                    ↓
+                </Button>
+                </div>
+            </Paper>
+            ))}
+        </div>
+        <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSubmit}
+            disabled={isSubmitting || disabled || submitted}
+            className="question-submit-btn"
+            sx={{ mt: 2, opacity: (disabled || submitted) ? 0.6 : 1 }}
+        >
+            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Svara'}
+        </Button>
+        </div>
+    );
+};
+
+const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }) => {
+    const [submitted, setSubmitted] = useState(false);
+
+     useEffect(() => {
+        setSubmitted(false);
+    }, [scenario]);
+
+    if (!scenario || !Array.isArray(scenario.options)) {
+        console.error("ScenarioQuestion received invalid data:", scenario);
+        return <Alert severity="warning">Scenariodata saknas eller är ogiltig.</Alert>;
+    }
+
+    const handleAnswerClick = (answerLabel) => {
+        if (disabled || submitted || isSubmitting) return;
+        setSubmitted(true);
+        onAnswer(answerLabel);
+    }
+
+    return (
+        <Card className={`scenario-card ${disabled || submitted ? 'disabled-scenario' : ''}`}>
+        <CardHeader
+            title={scenario.title || "Patientsituation"}
+            className="scenario-header"
+            sx={{ bgcolor: (disabled || submitted) ? '#ffcc80' : undefined }} // Adjust color when disabled
+        />
+        <CardContent>
+            <Typography variant="body1" className="scenario-description">
+            {scenario.description}
+            </Typography>
+            <div className="scenario-options">
+            {scenario.options.map((option, index) => (
+                <Button
+                key={option.value || index}
+                variant="outlined"
+                color="primary"
+                fullWidth
+                disabled={isSubmitting || disabled || submitted}
+                onClick={() => handleAnswerClick(option.label)}
+                className="scenario-option-btn"
+                sx={{ opacity: (disabled || submitted) ? 0.7 : 1, cursor: (disabled || submitted) ? 'default' : 'pointer' }}
+                >
+                {option.label}
+                </Button>
+            ))}
+            </div>
+        </CardContent>
+        </Card>
+    );
+};
+
+const RoleplayDialog = ({ roleplay, disabled = false }) => {
+    if (!roleplay || !Array.isArray(roleplay.dialogue)) {
+        console.error("RoleplayDialog received invalid data:", roleplay);
+        return <Alert severity="warning">Rolllspelsdata saknas eller är ogiltig.</Alert>;
+    }
+    const { title, scenario, dialogue, learningPoints } = roleplay;
+    // Simplified styling logic
+    const getAvatarStyle = (role) => {
+        if (role.includes('Sjuksköterska')) return { bgcolor: "#4caf50", initials: "S" };
+        if (role.includes('Läkare')) return { bgcolor: "#2196f3", initials: "L" };
+        if (role.includes('Patient')) return { bgcolor: "#ff9800", initials: "P" };
+        if (role.includes('Undersköterska')) return { bgcolor: "#9c27b0", initials: "U" };
+        return { bgcolor: "#607d8b", initials: role.charAt(0) || '?' };
+    };
+
+    return (
+        <div className={`roleplay-container ${disabled ? 'disabled-roleplay' : ''}`}>
+        <div className="roleplay-header" sx={{ opacity: disabled ? 0.8 : 1 }}>
+            <Typography variant="h6">{title || "Rollspel"}</Typography>
+            {scenario && <Typography variant="body2" className="roleplay-scenario">{scenario}</Typography>}
+        </div>
+        <div className="dialogue-container">
+            {dialogue.map((entry, index) => {
+            const { bgcolor, initials } = getAvatarStyle(entry.role);
+            return (
+                <div key={index} className={`dialogue-entry ${entry.role.includes('(du)') ? 'dialogue-user' : ''}`}>
+                <Avatar
+                    className="dialogue-avatar"
+                    sx={{ bgcolor: bgcolor, opacity: disabled ? 0.8 : 1, filter: disabled ? 'grayscale(30%)' : 'none' }}
+                >
+                    {initials}
+                </Avatar>
+                <div className="dialogue-content">
+                    <Typography variant="subtitle2" className="dialogue-role">{entry.role}</Typography>
+                    <Typography variant="body1" className="dialogue-message" sx={{ color: disabled ? '#555' : undefined }}>{entry.message}</Typography>
+                </div>
+                </div>
+            );
+            })}
+        </div>
+        {learningPoints && learningPoints.length > 0 && (
+            <div className="learning-points">
+            <Typography variant="subtitle1" className="learning-points-header">Viktiga lärdomar:</Typography>
+            <ul className="learning-points-list">
+                {learningPoints.map((point, index) => (
+                <li key={index}><Typography variant="body2" sx={{ color: disabled ? '#555' : undefined }}>{point}</Typography></li>
+                ))}
+            </ul>
+            </div>
+        )}
+        </div>
+    );
+};
+
 const FeedbackComponent = ({ feedback, disabled = false }) => {
     if (!feedback) {
-        console.error("Feedback data is missing:", feedback);
-        return <Alert severity="error">Kunde inte ladda feedback.</Alert>;
+        console.error("FeedbackComponent received invalid data:", feedback);
+        return <Alert severity="warning">Feedbackdata saknas eller är ogiltig.</Alert>;
     }
-  const feedbackStyles = {
-    "knowledge": { color: "#2196f3", icon: "📚", title: "Kunskapstips" },
-    "procedure": { color: "#4caf50", icon: "📋", title: "Procedurinformation" },
-    "priority": { color: "#ff9800", icon: "⚖️", title: "Prioriteringsråd" },
-    "safety": { color: "#f44336", icon: "⚠️", title: "Viktigt säkerhetsråd" }
-  };
-  const style = feedbackStyles[feedback.type] || feedbackStyles.knowledge;
+    const feedbackStyles = {
+        "knowledge": { severity: "info", icon: "📚", title: "Kunskapstips" },
+        "procedure": { severity: "info", icon: "📋", title: "Procedurinformation" },
+        "priority": { severity: "warning", icon: "⚖️", title: "Prioriteringsråd" },
+        "safety": { severity: "error", icon: "⚠️", title: "Viktigt säkerhetsråd" }
+    };
+    const style = feedbackStyles[feedback.type] || feedbackStyles.knowledge;
 
-  return (
-    <Alert
-      severity={feedback.type === "safety" ? "warning" : "info"}
-      icon={<span style={{ fontSize: '1.2rem' }}>{style.icon}</span>}
-      className={`feedback-alert ${disabled ? 'disabled-feedback' : ''}`}
-      sx={{ opacity: disabled ? 0.85 : 1 }}
-    >
-      <div className="feedback-content">
-        <Typography variant="subtitle1" className="feedback-title">{style.title}</Typography>
-        <Typography variant="body1" className="feedback-message">{feedback.message}</Typography>
-        {feedback.points && feedback.points.length > 0 && (
-          <ul className="feedback-points">
-            {feedback.points.map((point, idx) => (<li key={idx}>{point}</li>))}
-          </ul>
-        )}
-        {feedback.correctAction && (
-          <Typography variant="body1" className="feedback-action" sx={{ fontWeight: 'bold', mt: 1 }}>
-            Rekommendation: {feedback.correctAction}
-          </Typography>
-        )}
-      </div>
-    </Alert>
-  );
-};
-
-// Simple Binary Question (Yes/No, True/False)
-const SimpleBinaryQuestion = ({ text, options, onAnswer, isSubmitting, disabled = false }) => {
-    if (!options || options.length !== 2) {
-        console.error("Binary question data is missing or invalid:", options);
-        return <Alert severity="error">Kunde inte ladda frågan.</Alert>;
-    }
     return (
-    <div className={`binary-question-container ${disabled ? 'disabled-binary-question' : ''}`}>
-      {text && <Typography variant="body1" className="binary-question-text">{text}</Typography>}
-      <div className="binary-options">
-        {options.map((option, index) => (
-          <Button
-            key={index}
-            variant="contained"
-            // Determine color based on common patterns (Ja/Sant first, Nej/Falskt second)
-            color={/(ja|sant|true)/i.test(option.label || option.value || "") ? "primary" : "secondary"}
-            disabled={isSubmitting || disabled}
-            onClick={() => !disabled && onAnswer(option.label || option.value)}
-            className="binary-option-btn"
-            sx={{ opacity: disabled ? 0.7 : 1, cursor: disabled ? 'default' : 'pointer' }}
-          >
-            {option.label || option.value}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+        <Alert
+        severity={style.severity}
+        icon={<span style={{ fontSize: '1.2rem' }}>{style.icon}</span>}
+        className={`feedback-alert ${disabled ? 'disabled-feedback' : ''}`}
+        sx={{ opacity: disabled ? 0.85 : 1 }}
+        >
+        <div className="feedback-content">
+            <Typography variant="subtitle1" className="feedback-title">{style.title}</Typography>
+            {feedback.userAnswer && <Typography variant="body2" sx={{ mb: 1, fontStyle: 'italic' }}>Ditt svar: "{feedback.userAnswer}"</Typography>}
+            <Typography variant="body1" className="feedback-message">{feedback.message}</Typography>
+            {feedback.points && feedback.points.length > 0 && (
+            <ul className="feedback-points">
+                {feedback.points.map((point, idx) => (<li key={idx}>{point}</li>))}
+            </ul>
+            )}
+            {feedback.correctAction && (
+            <Typography variant="body1" className="feedback-action" sx={{ fontWeight: 'bold', mt: 1 }}>
+                Rekommendation: {feedback.correctAction}
+            </Typography>
+            )}
+        </div>
+        </Alert>
+    );
 };
 
-// Quick Response Buttons
+const SimpleBinaryQuestion = ({ text, options, onAnswer, isSubmitting, disabled = false }) => {
+    const [submitted, setSubmitted] = useState(false);
+
+     useEffect(() => {
+        setSubmitted(false);
+    }, [text, options]); // Reset if question changes
+
+    if (!options || options.length !== 2) {
+        console.error("SimpleBinaryQuestion received invalid data:", options);
+        return <Alert severity="warning">Frågedata saknas eller är ogiltig.</Alert>;
+    }
+
+    const handleAnswerClick = (answerLabel) => {
+         if (disabled || submitted || isSubmitting) return;
+         setSubmitted(true);
+         onAnswer(answerLabel);
+    }
+
+    return (
+        <div className={`binary-question-container ${disabled || submitted ? 'disabled-binary-question' : ''}`}>
+        {text && <Typography variant="body1" className="binary-question-text">{text}</Typography>}
+        <div className="binary-options">
+            {options.map((option, index) => (
+            <Button
+                key={index}
+                variant="contained"
+                color={index === 0 ? "primary" : "secondary"} // Assuming first is often 'Yes/True'
+                disabled={isSubmitting || disabled || submitted}
+                onClick={() => handleAnswerClick(option.label || option.value)}
+                className="binary-option-btn"
+                sx={{ opacity: (disabled || submitted) ? 0.7 : 1, cursor: (disabled || submitted) ? 'default' : 'pointer' }}
+            >
+                {option.label || option.value}
+            </Button>
+            ))}
+        </div>
+        </div>
+    );
+};
+
 const QuickResponseButtons = ({ onSendQuickResponse, disabled }) => {
   const [activeIndex, setActiveIndex] = useState(null);
   const quickResponses = [
     { text: "Berätta mer om detta", icon: "🔍" },
     { text: "Jag förstår inte", icon: "❓" },
-    { text: "Fortsätt", icon: "➡️" } // Changed to capital F for consistency if needed elsewhere
+    { text: "Fortsätt", icon: "➡️" }
   ];
 
   const handleClick = (text, index) => {
@@ -432,104 +484,127 @@ const QuickResponseButtons = ({ onSendQuickResponse, disabled }) => {
   );
 };
 
-// Text Animation Component (remains largely the same, ensures smooth text display)
 const SmoothTextDisplay = ({ text, onComplete, scrollToBottom, setTextCompletion }) => {
   const [paragraphs, setParagraphs] = useState([]);
   const [visibleParagraphs, setVisibleParagraphs] = useState(0);
   const timeoutRef = useRef(null);
   const prevTextRef = useRef('');
-  const isMountedRef = useRef(true); // Track mount status
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
       isMountedRef.current = true;
-      return () => { isMountedRef.current = false; }; // Cleanup on unmount
+      return () => {
+        isMountedRef.current = false;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      };
   }, []);
 
   useEffect(() => {
-    if (!text || text === prevTextRef.current) return;
+    if (!text || typeof text !== 'string' || text === prevTextRef.current) return;
     prevTextRef.current = text;
+
     const rawText = text.replace(/\r\n/g, '\n');
-    const majorBlocks = rawText.split(/\n\s*\n+/);
+    // Split by one or more newlines, keeping empty lines between major blocks if desired
+    const majorBlocks = rawText.split(/\n{2,}/);
     const processedParagraphs = [];
+
     majorBlocks.forEach(block => {
       const trimmedBlock = block.trim();
       if (!trimmedBlock) return;
-      // Keep lists together, split long paragraphs logically
-      if (/^[\s]*[-*+]\s+/.test(trimmedBlock) || /^[\s]*\d+\.\s+/.test(trimmedBlock) || trimmedBlock.length < 180) {
-        processedParagraphs.push(trimmedBlock);
-      } else {
-        const sentences = trimmedBlock.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) || [trimmedBlock];
-        let currentGroup = '';
-        sentences.forEach((sentence, i) => {
-          const trimmedSentence = sentence.trim();
-          if ((currentGroup.length + trimmedSentence.length > 200) || (currentGroup.length > 0 && /^(however|nevertheless|therefore|thus|consequently|furthermore|moreover|in addition|besides|alternatively|meanwhile|conversely|on the other hand|in contrast|similarly|likewise|accordingly|as a result)/i.test(trimmedSentence))) {
-             if (currentGroup) processedParagraphs.push(currentGroup);
-            currentGroup = trimmedSentence;
+
+      // Treat list items individually if they are separated by single newlines within a block
+      if (trimmedBlock.includes('\n')) {
+        const lines = trimmedBlock.split('\n');
+        let currentItem = '';
+        lines.forEach((line, index) => {
+          const trimmedLine = line.trim();
+          if (/^[\s]*[-*+]\s+/.test(trimmedLine) || /^[\s]*\d+\.\s+/.test(trimmedLine)) {
+            if (currentItem) processedParagraphs.push(currentItem); // Push previous item/paragraph
+            currentItem = trimmedLine; // Start new list item
+          } else if (currentItem) {
+             // Append to current item if it looks like a continuation (simple heuristic)
+             currentItem += '\n' + trimmedLine;
           } else {
-            currentGroup = currentGroup ? `${currentGroup} ${trimmedSentence}` : trimmedSentence;
+              // Treat as a normal paragraph if it doesn't start like a list item
+              if(trimmedLine) processedParagraphs.push(trimmedLine);
+              currentItem = '';
           }
-          if (i === sentences.length - 1 && currentGroup) {
-            processedParagraphs.push(currentGroup);
-          }
+           // Push the last item/paragraph in the block
+           if (index === lines.length - 1 && currentItem) {
+               processedParagraphs.push(currentItem);
+           }
         });
+
+      } else {
+          // Process blocks without internal newlines (likely single paragraphs or headers)
+          processedParagraphs.push(trimmedBlock);
       }
     });
+
     setParagraphs(processedParagraphs);
-    setVisibleParagraphs(0); // Reset visibility
-    if (setTextCompletion) setTextCompletion(0); // Reset completion state
-  }, [text, setTextCompletion]); // Added setTextCompletion dependency
+    setVisibleParagraphs(0);
+    if (setTextCompletion) setTextCompletion(0);
+
+  }, [text, setTextCompletion]);
 
   useEffect(() => {
-    if (!isMountedRef.current) return; // Prevent updates if unmounted
+    if (!isMountedRef.current) return;
 
     if (visibleParagraphs < paragraphs.length) {
-      if (visibleParagraphs > 0) setTimeout(scrollToBottom, 50);
+      if (visibleParagraphs > 0) {
+        // Schedule scroll after a short delay to allow rendering
+        requestAnimationFrame(() => setTimeout(scrollToBottom, 50));
+      }
       const currentPara = paragraphs[visibleParagraphs] || '';
-      let delay = 120;
+      let delay = 150; // Base delay
       const wordCount = currentPara.split(/\s+/).length;
-      if (/^[\s]*[-*+]\s+/.test(currentPara) || /^[\s]*\d+\.\s+/.test(currentPara)) delay = 180;
-      else if (/\?$/.test(currentPara)) delay = 150;
-      else if (currentPara.length < 40) delay = 80;
-      else delay += Math.min(wordCount / 15, 2.5) * 70;
+      // Adjust delay based on content type or length
+      if (/^[\s]*[-*+]\s+/.test(currentPara) || /^[\s]*\d+\.\s+/.test(currentPara)) delay = 200; // Slower for list items
+      else if (/\?$/.test(currentPara)) delay = 180; // Slightly slower for questions
+      else if (currentPara.length < 40) delay = 100; // Faster for short lines
+      else delay += Math.min(wordCount / 15, 3) * 80; // Add delay based on word count, capped
 
-      const newProgress = (visibleParagraphs + 1) / paragraphs.length; // Calculate progress based on next paragraph
+      delay = Math.max(50, delay); // Ensure minimum delay
+
+      const newProgress = (visibleParagraphs + 1) / paragraphs.length;
       if (setTextCompletion) setTextCompletion(newProgress);
 
-      if (timeoutRef.current) clearTimeout(timeoutRef.current); // Clear previous timer
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
       timeoutRef.current = setTimeout(() => {
-         if (isMountedRef.current) { // Check mount status before setting state
+         if (isMountedRef.current) {
             setVisibleParagraphs(prev => prev + 1);
          }
       }, delay);
 
     } else if (paragraphs.length > 0 && visibleParagraphs === paragraphs.length) {
+        // Ensure completion is set to 1 and callback is called only once
       if (setTextCompletion) setTextCompletion(1);
       if (onComplete) onComplete();
     }
 
-    return () => { // Cleanup timer on effect change or unmount
+    return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [visibleParagraphs, paragraphs, onComplete, scrollToBottom, setTextCompletion]);
 
-  const handleClick = () => {
+   const skipAnimation = () => {
+    if (!isMountedRef.current) return;
     if (visibleParagraphs < paragraphs.length) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-       if (isMountedRef.current) {
-            setVisibleParagraphs(paragraphs.length);
-            if (setTextCompletion) setTextCompletion(1);
-            scrollToBottom();
-            if (onComplete) onComplete();
-       }
+      setVisibleParagraphs(paragraphs.length); // Show all paragraphs
+       if (setTextCompletion) setTextCompletion(1); // Mark as complete
+       requestAnimationFrame(() => setTimeout(scrollToBottom, 50)); // Scroll after update
+      if (onComplete) onComplete(); // Trigger completion callback
     }
   };
 
   return (
-    <div className="smooth-text" onClick={handleClick} style={{ cursor: visibleParagraphs < paragraphs.length ? 'pointer' : 'auto' }}>
+    <div className="smooth-text" onClick={skipAnimation} style={{ cursor: visibleParagraphs < paragraphs.length ? 'pointer' : 'auto' }}>
       {paragraphs.slice(0, visibleParagraphs).map((para, index) => (
         <div key={index} className="animate-in-paragraph">
-          <ReactMarkdown className="markdown-content">{para}</ReactMarkdown>
+          {/* Render using ReactMarkdown */}
+          {typeof para === 'string' ? <ReactMarkdown className="markdown-content">{para}</ReactMarkdown> : null}
         </div>
       ))}
       {visibleParagraphs < paragraphs.length && (
@@ -539,7 +614,6 @@ const SmoothTextDisplay = ({ text, onComplete, scrollToBottom, setTextCompletion
   );
 };
 
-// Animated Interactive Item Component (logic remains similar, driven by textCompletion)
 const AnimatedInteractiveItem = ({ children, index = 0, isVisible, animationPhase, uniqueId, disabled = false }) => {
   const [show, setShow] = useState(false);
   const timerRef = useRef(null);
@@ -550,56 +624,62 @@ const AnimatedInteractiveItem = ({ children, index = 0, isVisible, animationPhas
     isMountedRef.current = true;
     return () => {
         isMountedRef.current = false;
-        if (timerRef.current) clearTimeout(timerRef.current); // Clear timer on unmount
+        if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
   useEffect(() => {
-    if (!isMountedRef.current) return;
+    if (!isMountedRef.current || !isVisible) {
+        // If not visible or unmounted, ensure it's hidden and clear timer
+        setShow(false);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        return;
+    }
 
-    if (isVisible && animationPhase >= 0.5) { // Start animating when text is 50% done
-      setShow(false); // Reset for animation
-      const baseDelay = animationPhase >= 0.9 ? 100 : 150; // Faster if text is almost done
-      const delay = baseDelay + (index * (animationPhase >= 0.8 ? 100 : 150)); // Staggering
+    // Determine if animation should start based on phase
+    const shouldAnimate = animationPhase >= 0.5; // Adjust threshold if needed
 
-      if (timerRef.current) clearTimeout(timerRef.current); // Clear existing timer
+    if (shouldAnimate && !show) { // Only trigger animation if it should start and isn't already shown
+      const baseDelay = animationPhase >= 0.9 ? 50 : 100; // Faster delay if text almost done
+      const staggerDelay = index * (animationPhase >= 0.8 ? 80 : 120); // Staggering
+      const totalDelay = baseDelay + staggerDelay;
+
+      if (timerRef.current) clearTimeout(timerRef.current); // Clear previous timer
 
       timerRef.current = setTimeout(() => {
           if(isMountedRef.current) setShow(true); // Show after delay if still mounted
-      }, delay);
+      }, totalDelay);
 
-    } else {
-      setShow(false); // Hide if not visible or animation phase is too early
-      if (timerRef.current) clearTimeout(timerRef.current); // Clear timer if visibility changes
+    } else if (!shouldAnimate && show) {
+        // If phase drops below threshold and it's shown, hide it (optional, depends on desired behavior)
+        // setShow(false);
+        // if (timerRef.current) clearTimeout(timerRef.current);
     }
 
      // Cleanup function for this effect
-     return () => {
-         if (timerRef.current) clearTimeout(timerRef.current);
+     return () => {if (timerRef.current) clearTimeout(timerRef.current);
      };
-  }, [isVisible, index, animationPhase]); // Rerun when these change
+  }, [isVisible, index, animationPhase, show]); // Re-run when visibility, index, phase, or show state changes
 
-  if (!isVisible) return null; // Don't render if parent isn't visible
+  if (!isVisible) return null;
 
   return (
     <div
       id={instanceIdRef.current}
       className={`interactive-item ${show ? 'animate-in' : ''} ${disabled ? 'inactive-interactive-item' : ''}`}
       style={{
-        opacity: show ? 1 : 0, // Control opacity based on 'show' state
-        transform: show ? 'translateY(0)' : 'translateY(20px)',
-        transition: 'opacity 0.5s ease-out, transform 0.5s ease-out',
-        pointerEvents: show && !disabled ? 'auto' : 'none', // Enable interaction only when shown and not disabled
-        ...(disabled && { // Add specific styles when disabled
-            // opacity: 0.8, // Already handled by className potentially
-            // filter: 'grayscale(50%)', // Example visual cue
-        }),
+        opacity: show ? 1 : 0,
+        transform: show ? 'translateY(0)' : 'translateY(15px)', // Slightly smaller initial offset
+        transition: 'opacity 0.4s ease-out, transform 0.4s ease-out',
+        pointerEvents: show && !disabled ? 'auto' : 'none',
       }}
     >
-      {children}
+      {/* Render children only when 'show' is true to avoid premature rendering/interaction issues */}
+      {show ? children : null}
     </div>
   );
 };
+
 
 // --- Main Chat Component ---
 
@@ -608,13 +688,13 @@ const ChatComponent = () => {
   const [userInput, setUserInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiIsThinking, setAiIsThinking] = useState(false);
-  const [textCompletion, setTextCompletion] = useState(0); // Tracks text animation progress (0 to 1)
+  const [textCompletion, setTextCompletion] = useState(0); // Tracks text animation progress (0 to 1) for the latest message
   const [latestMessageId, setLatestMessageId] = useState(null); // ID of the latest AI message
 
-  const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const navigate = useNavigate();
   const chatContainerRef = useRef(null);
+  const startChatCalledRef = useRef(false); // To prevent multiple start calls
 
   // Retrieve user info from localStorage
   const userName = localStorage.getItem('userName') || 'Användare';
@@ -628,47 +708,43 @@ const ChatComponent = () => {
     }
   }, [navigate]);
 
-  // Scroll to bottom function
+  // Scroll to bottom function using requestAnimationFrame for smoothness
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({
-        top: messagesContainerRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+        requestAnimationFrame(() => {
+            if (messagesContainerRef.current) {
+                 messagesContainerRef.current.scrollTo({
+                    top: messagesContainerRef.current.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
+       });
     }
   }, []);
 
   // Auto-scroll when messages update
   useEffect(() => {
-    // Delay scroll slightly to allow rendering and animation to start
+    // Scroll slightly delayed to allow elements to render
     const timer = setTimeout(() => {
         scrollToBottom();
-    }, 100); // Adjust delay as needed
+    }, 150);
     return () => clearTimeout(timer);
-}, [messages, scrollToBottom]); // Run when messages change
+  }, [messages, scrollToBottom]);
 
-
-  // Auto-scroll on window resize
-  useEffect(() => {
-    const handleResize = () => scrollToBottom();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [scrollToBottom]);
 
   // Fix mobile viewport height issues
   useEffect(() => {
-    const updateHeight = () => {
+    const setVhProperty = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
       if (chatContainerRef.current) {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-        // Use the --vh variable in CSS potentially, or set height directly
-        // chatContainerRef.current.style.height = `calc(var(--vh, 1vh) * 100)`; // Example if using CSS var
-        chatContainerRef.current.style.height = `${window.innerHeight}px`; // Direct height setting
+          // Use 100vh fallback for desktop, --vh for mobile adjustments
+          chatContainerRef.current.style.height = `calc(var(--vh, 1vh) * 100)`;
       }
     };
-    updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
+    setVhProperty();
+    window.addEventListener('resize', setVhProperty);
+    return () => window.removeEventListener('resize', setVhProperty);
   }, []);
 
   // Generate unique ID for messages
@@ -676,9 +752,14 @@ const ChatComponent = () => {
 
   // Start chat function (called on mount if no messages)
   const startChat = useCallback(async () => {
+    if (startChatCalledRef.current || messages.length > 0) return; // Prevent multiple calls
+    startChatCalledRef.current = true; // Mark as called
+
     console.log("Attempting to start chat...");
     setAiIsThinking(true);
-    setTextCompletion(0); // Reset completion for the first message
+    setTextCompletion(0);
+    setLatestMessageId(null); // Reset latest ID
+
     try {
       const response = await axios.post(API_ENDPOINTS.CHAT, {
         answers: { underskoterska, delegering },
@@ -693,10 +774,10 @@ const ChatComponent = () => {
       setMessages([{
         id: msgId,
         sender: 'assistant',
-        textContent: textContent,
+        textContent: textContent || "", // Ensure textContent is always a string
         interactiveElement: interactiveElement // Store parsed element directly
       }]);
-      // Text animation will start via SmoothTextDisplay
+      // setTextCompletion will be set by SmoothTextDisplay
     } catch (error) {
       console.error("Fel vid start av chatt:", error);
       const errorMsgId = generateId();
@@ -707,44 +788,46 @@ const ChatComponent = () => {
         textContent: 'Det uppstod ett fel vid anslutning till servern. Vänligen ladda om sidan och försök igen.',
         interactiveElement: null
       }]);
-      setTextCompletion(1); // Mark as complete since it's an error message
+      setTextCompletion(1); // Mark error message as complete
     } finally {
       setAiIsThinking(false);
     }
-  }, [underskoterska, delegering, userName]); // Dependencies for startChat
+  }, [underskoterska, delegering, userName, messages.length]); // Include messages.length
 
-  // Initialize chat on component mount if messages are empty
+  // Initialize chat on component mount
   useEffect(() => {
-    if (messages.length === 0) {
-      startChat();
+    // Only call startChat if messages are empty and it hasn't been called before
+    if (messages.length === 0 && localStorage.getItem('hasStartedChat') === 'true') {
+         startChat();
     }
-  }, [messages.length, startChat]); // Run only once on mount or if messages get cleared
+  }, [startChat, messages.length]);
 
 
   // Send message function
   const sendMessage = async (messageText) => {
-    // Check if submission is allowed
     const trimmedText = messageText.trim();
-    if (!trimmedText || isSubmitting || aiIsThinking) return; // Prevent sending empty or during AI thinking
+    if (!trimmedText || isSubmitting || aiIsThinking) return;
 
     const newUserMessageId = generateId();
     const newUserMessage = {
       id: newUserMessageId,
       sender: 'user',
-      textContent: trimmedText, // Store user text directly
-      interactiveElement: null // Users don't send interactive elements
+      textContent: trimmedText,
+      interactiveElement: null
     };
 
-    // Add user message and clear input immediately
+    // Add user message and start thinking state
     setMessages(prev => [...prev, newUserMessage]);
     setUserInput('');
-    setIsSubmitting(true);
+    setIsSubmitting(true); // Prevent further user input immediately
     setAiIsThinking(true);
-    setTextCompletion(0); // Reset for the upcoming AI response
-    setLatestMessageId(null); // Deactivate previous interactive elements
+    setTextCompletion(0); // Reset for the new AI response
+    const previousLatestId = latestMessageId; // Store previous latest ID
+    setLatestMessageId(null); // Deactivate previous interactive elements *before* sending request
+
 
     // Scroll after adding user message
-    setTimeout(scrollToBottom, 50);
+    requestAnimationFrame(() => setTimeout(scrollToBottom, 50));
 
     try {
       const response = await axios.post(API_ENDPOINTS.CHAT, {
@@ -753,31 +836,34 @@ const ChatComponent = () => {
         name: userName
       });
 
-      const { textContent, interactiveElement } = response.data.reply;
-      const newMessageId = generateId();
-      setLatestMessageId(newMessageId); // Set the new latest ID
+       if (response?.data?.reply) {
+           const { textContent, interactiveElement } = response.data.reply;
+           const newMessageId = generateId();
+           setLatestMessageId(newMessageId); // Set the new latest ID
 
-      setMessages(prev => [...prev, {
-        id: newMessageId,
-        sender: 'assistant',
-        textContent: textContent,
-        interactiveElement: interactiveElement
-      }]);
-      // Text animation will start via SmoothTextDisplay
+           setMessages(prev => [...prev, {
+             id: newMessageId,
+             sender: 'assistant',
+             textContent: textContent || "", // Ensure string
+             interactiveElement: interactiveElement
+           }]);
+        } else {
+            throw new Error("Invalid API response structure");
+        }
 
     } catch (error) {
       console.error("Fel vid anrop till API:", error);
       const errorMsgId = generateId();
-      setLatestMessageId(errorMsgId); // Update latest ID even for error message
+      setLatestMessageId(errorMsgId);
       setMessages(prev => [...prev, {
         id: errorMsgId,
         sender: 'assistant',
-        textContent: 'Det uppstod ett fel. Vänligen försök igen.',
+        textContent: 'Det uppstod ett fel när jag försökte svara. Vänligen försök igen.',
         interactiveElement: null
       }]);
       setTextCompletion(1); // Mark error message as complete
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Allow user input again *after* response or error
       setAiIsThinking(false);
     }
   };
@@ -788,13 +874,12 @@ const ChatComponent = () => {
   };
 
   const handleSuggestionClick = (suggestionText) => {
-    // Allow suggestion click even if AI is thinking? Maybe not.
-     if (isSubmitting || aiIsThinking) return;
+     if (isSubmitting || aiIsThinking) return; // Double check interaction isn't allowed
      sendMessage(suggestionText);
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isSubmitting && !aiIsThinking) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -807,8 +892,8 @@ const ChatComponent = () => {
 
   // Callback when text animation completes
   const handleDisplayComplete = useCallback(() => {
-    setTextCompletion(1); // Ensure completion state is 1
-    scrollToBottom(); // Ensure scrolled to bottom after animation
+    setTextCompletion(1); // Set completion state to 1
+    requestAnimationFrame(() => setTimeout(scrollToBottom, 100)); // Ensure scroll after animation completes
   }, [scrollToBottom]);
 
   // --- Rendering Logic ---
@@ -816,78 +901,103 @@ const ChatComponent = () => {
     const isActive = message.id === latestMessageId;
     const { textContent, interactiveElement } = message;
 
-    // Determine the specific interactive component to render
     let InteractiveComponent = null;
     if (interactiveElement && interactiveElement.type && interactiveElement.data) {
-      const props = {
-        key: `${message.id}-${interactiveElement.type}`, // Unique key for the component
-        onAnswer: handleSuggestionClick, // Pass handler for buttons/actions
+      // Pass specific data based on type, and add disabled prop
+      const commonProps = {
+        key: `${message.id}-${interactiveElement.type}`, // Unique key
+        onAnswer: handleSuggestionClick,
         isSubmitting: isSubmitting,
-        disabled: !isActive, // Disable if not the latest message
+        disabled: !isActive, // Disable if not the latest active message
       };
 
-      switch (interactiveElement.type) {
-        case 'scenario':
-          InteractiveComponent = <ScenarioQuestion scenario={interactiveElement.data.scenario} {...props} />;
-          break;
-        case 'multipleChoice':
-          InteractiveComponent = <MultipleChoiceQuestion question={interactiveElement.data.multipleChoice} {...props} />;
-          break;
-        case 'matching':
-           InteractiveComponent = <MatchingQuestion question={interactiveElement.data.matching} {...props} />;
-           break;
-        case 'ordering':
-            InteractiveComponent = <OrderingQuestion question={interactiveElement.data.ordering} {...props} />;
-            break;
-        case 'roleplay':
-            // Roleplay doesn't usually have an "answer", it's display-only
-            InteractiveComponent = <RoleplayDialog roleplay={interactiveElement.data.roleplay} disabled={!isActive} />;
-            break;
-        case 'feedback':
-            // Feedback is also display-only
-            InteractiveComponent = <FeedbackComponent feedback={interactiveElement.data.feedback} disabled={!isActive} />;
-            break;
-        case 'suggestions':
-            // Handle simple suggestions (buttons) and binary questions
-            const suggestions = interactiveElement.data.suggestions;
-            const text = interactiveElement.data.text; // Get text associated with suggestions
-            if (suggestions && suggestions.length === 2 && /(ja|nej|sant|falskt|true|false)/i.test(suggestions[0].label || suggestions[0].value)) {
-                InteractiveComponent = <SimpleBinaryQuestion text={text} options={suggestions} {...props} />;
-            } else if (suggestions) {
-                InteractiveComponent = (
-                    <div className="suggestions-container">
-                        {suggestions.map((sugg, idx) => (
-                        <Button
-                            key={idx}
-                            className="suggestion-button"
-                            variant="contained"
-                            onClick={() => props.onAnswer(sugg.label || sugg.value)}
-                            disabled={props.disabled || props.isSubmitting}
-                            sx={{ opacity: props.disabled ? 0.7 : 1, cursor: props.disabled ? 'default' : 'pointer' }}
-                        >
-                            {sugg.label || sugg.value}
-                        </Button>
-                        ))}
-                    </div>
-                );
-            }
-            break;
-        // Add cases for 'media', 'exercise' if they become interactive
-        default:
-          console.warn(`Unknown interactive element type: ${interactiveElement.type}`);
+      try {
+          switch (interactiveElement.type) {
+            case 'scenario':
+                // Ensure the data structure is correct before accessing .scenario
+                if (interactiveElement.data.scenario) {
+                    InteractiveComponent = <ScenarioQuestion scenario={interactiveElement.data.scenario} {...commonProps} />;
+                } else { console.error("Missing 'scenario' key in data for scenario type"); }
+              break;
+            case 'multipleChoice':
+                if (interactiveElement.data.multipleChoice) {
+                    InteractiveComponent = <MultipleChoiceQuestion question={interactiveElement.data.multipleChoice} {...commonProps} />;
+                } else { console.error("Missing 'multipleChoice' key in data for multipleChoice type"); }
+              break;
+            case 'matching':
+                if (interactiveElement.data.matching) {
+                    InteractiveComponent = <MatchingQuestion question={interactiveElement.data.matching} {...commonProps} />;
+                } else { console.error("Missing 'matching' key in data for matching type"); }
+               break;
+            case 'ordering':
+                 if (interactiveElement.data.ordering) {
+                    InteractiveComponent = <OrderingQuestion question={interactiveElement.data.ordering} {...commonProps} />;
+                 } else { console.error("Missing 'ordering' key in data for ordering type"); }
+                break;
+            case 'roleplay':
+                // Roleplay doesn't have onAnswer prop usually
+                if (interactiveElement.data.roleplay) {
+                    InteractiveComponent = <RoleplayDialog roleplay={interactiveElement.data.roleplay} disabled={!isActive} />;
+                } else { console.error("Missing 'roleplay' key in data for roleplay type"); }
+                break;
+            case 'feedback':
+                 // Feedback doesn't have onAnswer prop
+                 if (interactiveElement.data.feedback) {
+                    InteractiveComponent = <FeedbackComponent feedback={interactiveElement.data.feedback} disabled={!isActive} />;
+                 } else { console.error("Missing 'feedback' key in data for feedback type"); }
+                break;
+            case 'suggestions':
+                const suggestionsData = interactiveElement.data.suggestions || interactiveElement.data; // Handle both structures potentially
+                const suggestions = suggestionsData?.options || suggestionsData?.suggestions; // Adapt to potential key names
+                const text = suggestionsData?.text;
+
+                if (suggestions && Array.isArray(suggestions)) {
+                    // Check for binary question pattern (e.g., Ja/Nej)
+                    const isBinary = suggestions.length === 2 && suggestions.every(s => typeof (s.label || s.value) === 'string' && /(ja|nej|sant|falskt|true|false)/i.test(s.label || s.value));
+
+                    if (isBinary) {
+                        InteractiveComponent = <SimpleBinaryQuestion text={text} options={suggestions} {...commonProps} />;
+                    } else {
+                        // Render standard suggestion buttons
+                        InteractiveComponent = (
+                        <div className="suggestions-container">
+                            {text && <Typography variant="body2" sx={{ width: '100%', mb: 1 }}>{text}</Typography>}
+                            {suggestions.map((sugg, idx) => (
+                            <Button
+                                key={sugg.value || idx} // Use value or index as key
+                                className="suggestion-button"
+                                variant="contained"
+                                onClick={() => commonProps.onAnswer(sugg.label || sugg.value)}
+                                disabled={commonProps.disabled || commonProps.isSubmitting}
+                                sx={{ opacity: commonProps.disabled ? 0.7 : 1, cursor: commonProps.disabled ? 'default' : 'pointer' }}
+                            >
+                                {sugg.label || sugg.value}
+                            </Button>
+                            ))}
+                        </div>
+                        );
+                    }
+                 } else { console.error("Missing or invalid 'suggestions' array in data for suggestions type"); }
+                break;
+            default:
+              console.warn(`Unknown interactive element type: ${interactiveElement.type}`);
+          }
+      } catch (renderError) {
+           console.error(`Error rendering interactive component type ${interactiveElement.type}:`, renderError, "Data:", interactiveElement.data);
+            InteractiveComponent = <Alert severity="error">Kunde inte rendera interaktivt element.</Alert>;
       }
     }
 
     return (
       <Box key={message.id} className={`chat-message assistant ${isActive ? 'active-message' : ''}`}>
         {/* Display text content - animate if it's the active message */}
-        {textContent && (
+        {typeof textContent === 'string' && textContent.length > 0 && (
           isActive ? (
             <SmoothTextDisplay
               text={textContent}
               onComplete={handleDisplayComplete}
               scrollToBottom={scrollToBottom}
-              setTextCompletion={setTextCompletion} // Pass setter to update progress
+              setTextCompletion={setTextCompletion}
             />
           ) : (
             <ReactMarkdown className="markdown-content">{textContent}</ReactMarkdown>
@@ -898,11 +1008,11 @@ const ChatComponent = () => {
         {InteractiveComponent && (
           <div className="interactive-content">
             <AnimatedInteractiveItem
-              isVisible={true} // Always attempt to render if component exists
-              animationPhase={isActive ? textCompletion : 1} // Control animation timing
-              index={0} // Only one main interactive element per message now
+              isVisible={true} // Always try to render if component exists
+              animationPhase={isActive ? textCompletion : 1} // Use completion status for timing
+              index={0} // Assume one main interactive element
               uniqueId={`${message.id}-interactive`}
-              disabled={!isActive} // Pass disabled state based on activity
+              disabled={!isActive} // Pass disabled state
             >
               {InteractiveComponent}
             </AnimatedInteractiveItem>
@@ -914,7 +1024,8 @@ const ChatComponent = () => {
 
 
   return (
-    <div className="chat-container" ref={chatContainerRef}>
+    // Use ref here for height adjustment
+    <div className="chat-container" ref={chatContainerRef} style={{ height: '100vh' }}>
       {/* Header */}
       <div className="chat-header">
         <h1>Delegeringsutbildning</h1>
@@ -925,16 +1036,27 @@ const ChatComponent = () => {
 
       {/* Messages Area */}
       <div className="chat-messages" ref={messagesContainerRef}>
-        {messages.map((msg) =>
-          msg.sender === 'assistant'
-            ? renderAIMessage(msg)
-            : (
+        {messages.map((msg) => {
+          if (msg.sender === 'assistant') {
+             // Ensure textContent is a string before rendering
+             if (typeof msg.textContent !== 'string') {
+                console.warn(`Message ${msg.id} has non-string textContent:`, msg.textContent);
+                return null; // Or render a placeholder/error
+             }
+            return renderAIMessage(msg);
+          } else if (msg.sender === 'user') {
+             if (typeof msg.textContent !== 'string') {
+                 console.warn(`User message ${msg.id} has non-string textContent:`, msg.textContent);
+                 return null;
+             }
+            return (
               <Box key={msg.id} className="chat-message user">
-                {/* User messages are simple paragraphs */}
                 <ReactMarkdown className="markdown-content">{msg.textContent}</ReactMarkdown>
               </Box>
-            )
-        )}
+            );
+          }
+          return null; // Should not happen
+        })}
 
         {/* AI Thinking Indicator */}
         {aiIsThinking && (
@@ -944,13 +1066,9 @@ const ChatComponent = () => {
             </div>
           </div>
         )}
-
-        {/* Scroll anchor */}
-        <div ref={messagesEndRef} style={{ height: 1 }} />
       </div>
 
       {/* Quick Response Buttons Area */}
-      {/* Show quick responses only when user can interact */}
       <div className="quick-responses-area">
         <QuickResponseButtons
           onSendQuickResponse={handleQuickResponse}
@@ -977,7 +1095,7 @@ const ChatComponent = () => {
           onClick={handleSendMessage}
           disabled={isSubmitting || !userInput.trim() || aiIsThinking} // Disable button appropriately
         >
-          {isSubmitting || aiIsThinking ? "Väntar..." : "Skicka"}
+          {isSubmitting || aiIsThinking ? <CircularProgress size={24} color="inherit" /> : "Skicka"}
         </Button>
       </div>
 
