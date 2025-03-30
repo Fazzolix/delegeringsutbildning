@@ -1,22 +1,38 @@
-// frontend/src/config/api.js
-// Använd BACKEND_URL från .env om den finns, annars fallback till localhost:10000
-// Säkerställ att porten matchar backend (vanligtvis 10000 för Gunicorn om inte annat anges)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:10000';
+// frontend/src/App.js
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Welcome from './Components/Welcome';
+import ChatComponent from './Components/ChatComponent';
+// PromptEditor import removed
+import './App.css';
 
-console.log("API Base URL:", API_BASE_URL); // För felsökning
+function App() {
+  // Helper component to protect the chat route
+  const ProtectedChatRoute = ({ children }) => {
+    const hasStarted = localStorage.getItem('hasStartedChat') === 'true';
+    return hasStarted ? children : <Navigate to="/" replace />;
+  };
 
-const API_ENDPOINTS = {
-  // Chat endpoint
-  CHAT: `${API_BASE_URL}/api/chat`,
+  return (
+    <Router>
+      <div className="App">
+        <Routes>
+          <Route path="/" element={<Welcome />} />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedChatRoute>
+                <ChatComponent />
+              </ProtectedChatRoute>
+            }
+          />
+          {/* PromptEditor route removed */}
+          {/* Fallback route or redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
 
-  // User endpoint
-  USER: `${API_BASE_URL}/api/user`,
-
-  // TTS endpoint är borttagen
-  // TTS_STREAM: `${API_BASE_URL}/api/tts-stream`,
-
-  // Prompt editor endpoint är borttagen
-  // PROMPT_EDITOR: `${API_BASE_URL}/api/admin/prompt`,
-};
-
-export default API_ENDPOINTS;
+export default App;
