@@ -77,9 +77,10 @@ def parse_ai_response(raw_text: str) -> dict:
 
         # Check if JSON is at the very beginning (with potential text after)
         # This needs to handle nested structures correctly.
-        # Corrected regex: caret ^ goes inside the string literal.
+        # ***** DENNA RAD ÄR KORRIGERAD *****
         if not extracted_json and raw_text.startswith('{'):
              # Regex to find a valid JSON object at the start, handling nesting
+             # Ensure caret ^ is inside r"..."
              match = re.match(r"^\s*(\{ (?: [^{}] | \{(?: [^{}] | \{[^{}]*\} )*\} )* \})\s*", raw_text, re.DOTALL | re.VERBOSE)
              if match:
                 potential_json_str = match.group(1)
