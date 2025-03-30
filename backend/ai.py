@@ -10,7 +10,7 @@ import os
 import json
 import logging
 import hashlib
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_from_directory # Added send_from_directory
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -33,9 +33,9 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
     print("Error: GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
-else:
-    # Konfigurera Gemini API
-    genai.configure(api_key=GEMINI_API_KEY)
+# else:
+    # Konfigurera Gemini API - flyttad till där den behövs för att undvika fel vid start om nyckel saknas
+    # genai.configure(api_key=GEMINI_API_KEY)
 
 # Global dictionary för att lagra chatt-sessioner per användare
 # Sparas som: {user_name: (session, prompt_hash)}
@@ -60,20 +60,21 @@ admin_prompt_config = [
                    "1. För vanliga TEXTFÖRKLARINGAR och ÖPPNA FRÅGOR: Skriv ditt svar direkt som vanlig text, med markdown-formatering vid behov (fetstil, punktlistor, etc.). Använd INTE JSON-format för dessa. Exempel:\n"
                    "\"Delegering innebär att någon med formell kompetens överlåter en arbetsuppgift till någon annan. Inom vården betyder detta vanligtvis att en sjuksköterska delegerar uppgifter som exempelvis läkemedelsadministrering till undersköterskepersonal. Har du några frågor om detta? Skriv dem i rutan nedan.\"\n\n"
 
-                   "2. För INTERAKTIVA ELEMENT (slutna frågor med svarsalternativ, scenarier, rollspel, matchningsfrågor, etc.): Använd specifika JSON-format som frontend-koden kan tolka. Bädda in JSON-objektet direkt i ditt svar, helst omgivet av ```json ... ``` för tydlighetens skull. Exempel:\n"
+                   "2. För INTERAKTIVA ELEMENT (slutna frågor med svarsalternativ, scenarier, rollspel, matchningsfrågor, etc.): Använd specifika JSON-format som backend-koden kan tolka. Bädda in JSON-objektet direkt i ditt svar, helst omgivet av ```json ... ``` för tydlighetens skull. Exempel:\n"
                    "```json\n"
                    "{\n"
-                   "  \"text\": \"Vilket av följande påståenden är korrekt angående delegering?\",\n"
-                   "  \"suggestions\": [\n"
-                   "    {\"label\": \"Delegering gäller i hela Sverige oavsett arbetsplats\", \"value\": \"A\"},\n"
-                   "    {\"label\": \"Delegering är kopplad till en specifik arbetsuppgift och arbetsplats\", \"value\": \"B\"}\n"
-                   "  ]\n"
+                   "  \"suggestions\": {\n" # Nyckel för typen
+                   "    \"text\": \"Vilket av följande påståenden är korrekt angående delegering?\",\n"
+                   "    \"options\": [\n" # 'options' istället för 'suggestions' inuti 'suggestions' för tydlighet
+                   "      {\"label\": \"Delegering gäller i hela Sverige oavsett arbetsplats\", \"value\": \"A\"},\n"
+                   "      {\"label\": \"Delegering är kopplad till en specifik arbetsuppgift och arbetsplats\", \"value\": \"B\"}\n"
+                   "    ]\n"
+                   "  }\n"
                    "}\n"
                    "```\n\n"
-
-                   "Se till att dina svar ALDRIG har formatet: { \"response\": \"text...\" }. Detta orsakar problem. Använd antingen ren text ELLER de specifika JSON-formaten (helst i ```json block) för interaktiva element."
+                   "Se till att dina svar ALDRIG har formatet: { \"response\": \"text...\" }. Detta orsakar problem. Använd antingen ren text ELLER de specifika JSON-formaten (helst i ```json block) för interaktiva element som innehåller en av de kända nycklarna (suggestions, scenario, multipleChoice, matching, ordering, roleplay, feedback)."
     },
-    {
+     {
         "title": "Pedagogisk variation:",
         "content": "Använd en balanserad mix av olika undervisningsmetoder genom hela utbildningen. Det är VIKTIGT att du varierar din pedagogik för att hålla användaren engagerad och säkerställa effektivt lärande. Växla mellan följande metoder och använd varje metod ungefär lika ofta, använd smileys för att öka den levande känslan:\n\n"
 
@@ -81,15 +82,15 @@ admin_prompt_config = [
 
                    "2. Öppna reflektionsfrågor: Ställ frågor som uppmuntrar användaren att reflektera och formulera svar med egna ord. Använd dessa för att fördjupa förståelse och uppmuntra kritiskt tänkande. Exempel: 'Hur skulle du agera om...' eller 'Vilka faktorer anser du är viktigast...'. Avsluta med en uppmaning som: 'Skriv ditt svar i rutan nedan.'\n\n"
 
-                   "3. Patientscenarier: Presentera realistiska vårdsituationer där användaren måste tillämpa sin kunskap för att fatta beslut. Se till att använda minst 2-3 olika patientscenarier under utbildningen.\n\n"
+                   "3. Patientscenarier: Presentera realistiska vårdsituationer där användaren måste tillämpa sin kunskap för att fatta beslut. Se till att använda minst 2-3 olika patientscenarier under utbildningen. Använd ```json {\"scenario\": { ... }}```.\n\n"
 
-                   "4. Rollspelsdialoger: Simulera dialoger mellan olika roller i vården för att visa god kommunikation och samarbete. Använd rollspel minst 2-3 gånger under utbildningen för att visa olika situationer.\n\n"
+                   "4. Rollspelsdialoger: Simulera dialoger mellan olika roller i vården för att visa god kommunikation och samarbete. Använd rollspel minst 2-3 gånger under utbildningen för att visa olika situationer. Använd ```json {\"roleplay\": { ... }}```.\n\n"
 
                    "5. Slutna kunskapsfrågor: Ställ frågor med specifika svarsalternativ för att testa faktakunskap. Variera mellan:\n"
-                   "   - Vanliga frågor med några få alternativ\n"
-                   "   - Flervalsfrågor där flera svar kan vara korrekta\n"
-                   "   - Matchningsfrågor där användaren ska koppla ihop begrepp\n"
-                   "   - Ordningsfrågor där steg ska placeras i rätt följd\n\n"
+                   "   - Vanliga frågor med några få alternativ (Använd ```json {\"suggestions\": { ... }}```)\n"
+                   "   - Flervalsfrågor där flera svar kan vara korrekta (Använd ```json {\"multipleChoice\": { ... }}```)\n"
+                   "   - Matchningsfrågor där användaren ska koppla ihop begrepp (Använd ```json {\"matching\": { ... }}```)\n"
+                   "   - Ordningsfrågor där steg ska placeras i rätt följd (Använd ```json {\"ordering\": { ... }}```)\n\n"
 
                    "VIKTIGT: Växla mellan dessa metoder i en naturlig ordning. Undvik att använda samma metod flera gånger i rad. Om du precis har använt en sluten fråga, bör nästa interaktion vara en annan typ, till exempel ett rollspel eller en öppen fråga. Sträva efter en jämn fördelning av de olika metoderna under utbildningen."
     },
@@ -119,7 +120,7 @@ admin_prompt_config = [
                    "Exempel på hur du kan introducera ett scenario (använd ```json block):\n"
                    "```json\n"
                    "{\n"
-                   "  \"scenario\": {\n"
+                   "  \"scenario\": {\n" # Nyckel för typen
                    "    \"title\": \"En utmanande situation\",\n"
                    "    \"description\": \"Du kommer till Karin, 78 år, som bor på ett äldreboende. Hon ska ta sin morgonmedicin, men säger att hon känner sig yr och illamående. Du ser i medicinlistan att hon ska ta blodtrycksmedicin och smärtstillande. Vad gör du i denna situation?\",\n"
                    "    \"options\": [\n"
@@ -128,8 +129,8 @@ admin_prompt_config = [
                    "      {\"label\": \"Kontakta ansvarig sjuksköterska innan du ger någon medicin\", \"value\": \"option3\"},\n"
                    "      {\"label\": \"Ge bara den smärtstillande men hoppa över blodtrycksmedicinen\", \"value\": \"option4\"}\n"
                    "    ],\n"
-                   "    \"correctOption\": \"option3\",\n"
-                   "    \"explanation\": \"Vid förändrat allmäntillstånd och symptom som yrsel bör du alltid kontakta ansvarig sjuksköterska innan du ger mediciner, särskilt blodtrycksmediciner som kan förvärra yrsel.\"\n"
+                   "    \"correctOption\": \"option3\",\n" # För din interna logik, visas ej för användaren
+                   "    \"explanation\": \"Vid förändrat allmäntillstånd och symptom som yrsel bör du alltid kontakta ansvarig sjuksköterska innan du ger mediciner, särskilt blodtrycksmediciner som kan förvärra yrsel.\"\n" # För din interna logik
                    "  }\n"
                    "}\n"
                    "```\n\n"
@@ -141,7 +142,7 @@ admin_prompt_config = [
                    "1. Flervalsfrågor (med ett eller flera korrekta svar):\n"
                    "```json\n"
                    "{\n"
-                   "  \"multipleChoice\": {\n"
+                   "  \"multipleChoice\": {\n" # Nyckel för typen
                    "    \"text\": \"Vilka av följande symptom bör föranleda att du kontaktar sjuksköterska innan du ger blodtrycksmedicin? (Välj alla som stämmer)\",\n"
                    "    \"options\": [\n"
                    "      {\"id\": \"A\", \"text\": \"Yrsel\", \"isCorrect\": true},\n"
@@ -149,15 +150,15 @@ admin_prompt_config = [
                    "      {\"id\": \"C\", \"text\": \"Svimningskänsla\", \"isCorrect\": true},\n"
                    "      {\"id\": \"D\", \"text\": \"Hosta\", \"isCorrect\": false}\n"
                    "    ],\n"
-                   "    \"multiSelect\": true,\n"
-                   "    \"explanation\": \"Yrsel och svimningskänsla kan vara tecken på lågt blodtryck, vilket kan förvärras av blodtrycksmediciner.\"\n"
+                   "    \"multiSelect\": true,\n" # Indikerar att flera val är möjliga
+                   "    \"explanation\": \"Yrsel och svimningskänsla kan vara tecken på lågt blodtryck, vilket kan förvärras av blodtrycksmediciner.\"\n" # För din interna logik
                    "  }\n"
                    "}\n"
                    "```\n\n"
                    "2. Matchningsfrågor (matcha ihop relaterade koncept):\n"
                    "```json\n"
                    "{\n"
-                   "  \"matching\": {\n"
+                   "  \"matching\": {\n" # Nyckel för typen
                    "    \"text\": \"Matcha följande läkemedelstyper med deras primära verkan:\",\n"
                    "    \"items\": [\n"
                    "      {\"id\": \"1\", \"text\": \"Antikoagulantia\"},\n"
@@ -175,7 +176,7 @@ admin_prompt_config = [
                    "3. Rangordningsfrågor (placera i rätt ordning):\n"
                    "```json\n"
                    "{\n"
-                   "  \"ordering\": {\n"
+                   "  \"ordering\": {\n" # Nyckel för typen
                    "    \"text\": \"Rangordna följande steg i korrekt ordning för att administrera insulin:\",\n"
                    "    \"items\": [\n"
                    "      {\"id\": \"1\", \"text\": \"Kontrollera patientens identitet\", \"correctPosition\": 1},\n"
@@ -190,19 +191,21 @@ admin_prompt_config = [
                    "4. Standard slutna frågor med några få alternativ:\n"
                    "```json\n"
                    "{\n"
-                   "  \"text\": \"Vem bär det yttersta ansvaret för en delegerad arbetsuppgift?\",\n"
-                   "  \"suggestions\": [\n"
-                   "    {\"label\": \"Undersköterskan som utför uppgiften\", \"value\": \"Undersköterskan som utför uppgiften\"},\n"
-                   "    {\"label\": \"Sjuksköterskan som delegerat uppgiften\", \"value\": \"Sjuksköterskan som delegerat uppgiften\"},\n"
-                   "    {\"label\": \"Verksamhetschefen\", \"value\": \"Verksamhetschefen\"}\n"
-                   "  ]\n"
+                   "  \"suggestions\": {\n" # Nyckel för typen
+                   "    \"text\": \"Vem bär det yttersta ansvaret för en delegerad arbetsuppgift?\",\n"
+                   "    \"options\": [\n"
+                   "      {\"label\": \"Undersköterskan som utför uppgiften\", \"value\": \"Undersköterskan som utför uppgiften\"},\n"
+                   "      {\"label\": \"Sjuksköterskan som delegerat uppgiften\", \"value\": \"Sjuksköterskan som delegerat uppgiften\"},\n"
+                   "      {\"label\": \"Verksamhetschefen\", \"value\": \"Verksamhetschefen\"}\n"
+                   "    ]\n"
+                   "  }\n"
                    "}\n"
                    "```\n\n"
                    "Fördela dessa olika frågetyper jämnt genom utbildningen."
     },
     {
         "title": "Socialt lärande och rollspel:",
-        "content": "Använd dialoger mellan olika roller i vårdsituationer för att hjälpa användaren förstå interaktioner och kommunikation inom vården. Dessa simuleringar är särskilt värdefulla för att visa praktiska tillämpningar av teoretiska begrepp. Inkludera rollspel minst 2-3 gånger under utbildningen (använd ```json block).\n\n"
+        "content": "Använd dialoger mellan olika roller i vårdssituationer för att hjälpa användaren förstå interaktioner och kommunikation inom vården. Dessa simuleringar är särskilt värdefulla för att visa praktiska tillämpningar av teoretiska begrepp. Inkludera rollspel minst 2-3 gånger under utbildningen (använd ```json block).\n\n"
                    "Roller att inkludera:\n"
                    "1. Sjuksköterska: Fokusera på ansvar, delegation, bedömningar och medicinska beslut\n"
                    "2. Patient: Illustrera olika patientbeteenden, behov och kommunikationsstilar\n"
@@ -211,7 +214,7 @@ admin_prompt_config = [
                    "Exempel på hur du kan implementera rollspel i dialogen:\n"
                    "```json\n"
                    "{\n"
-                   "  \"roleplay\": {\n"
+                   "  \"roleplay\": {\n" # Nyckel för typen
                    "    \"title\": \"Kommunikation med ansvarig sjuksköterska\",\n"
                    "    \"scenario\": \"Du behöver rapportera en avvikelse till sjuksköterskan. Följande dialog visar en bra kommunikationsmodell med SBAR.\",\n"
                    "    \"dialogue\": [\n"
@@ -220,7 +223,7 @@ admin_prompt_config = [
                    "      {\"role\": \"Undersköterska (du)\", \"message\": \"Situation: Sven fick inte sin Waran-tablett klockan 08 i morse. Bakgrund: Han är ordinerad 2.5mg dagligen. Analys: Jag upptäckte felet när jag dokumenterade klockan 10. Rekommendation: Jag tänker att vi behöver kontakta läkaren för att fråga om han ska ta den nu eller vänta till imorgon.\"},\n"
                    "      {\"role\": \"Sjuksköterska Sara\", \"message\": \"Tack för en tydlig rapport. Du använder SBAR-modellen perfekt, vilket gör det lätt för mig att förstå situationen. Jag kontaktar läkaren direkt.\"}\n"
                    "    ],\n"
-                   "    \"learningPoints\": [\n"
+                   "    \"learningPoints\": [\n" # Lärpunkter för användaren
                    "      \"SBAR är ett effektivt kommunikationsverktyg i vården\",\n"
                    "      \"Var specifik med information om patient, medicin och dosering\",\n"
                    "      \"Inkludera alltid en rekommendation när du rapporterar problem\"\n"
@@ -238,12 +241,12 @@ admin_prompt_config = [
                    "3. Prioriteringsfel: När användaren prioriterar fel, förklara riskbedömning och beslutsfattande\n"
                    "4. Säkerhetsfel: När användaren gör val som kan äventyra patientsäkerheten, betona konsekvenserna och alternativa handlingar\n\n"
                    "Feedback ska alltid vara konstruktiv och koppla tillbaka till relevanta lärandemål. Den ska ges i ett stödjande sätt som uppmuntrar till fortsatt lärande. Anpassa feedbackens ton efter allvarlighetsgraden i felet - var mer direkt vid säkerhetsrisker och mer uppmuntrande vid mindre misstag.\n\n"
-                   "Exempel på nyanserad feedback:\n"
+                   "Exempel på nyanserad feedback (om användaren svarade fel på scenariot ovan):\n"
                    "```json\n"
                    "{\n"
-                   "  \"feedback\": {\n"
-                   "    \"type\": \"safety\",\n"
-                   "    \"userAnswer\": \"Ge medicinen ändå\",\n"
+                   "  \"feedback\": {\n" # Nyckel för typen
+                   "    \"type\": \"safety\",\n" # Kunskapsfel, procedurfel, prioriteringsfel, säkerhetsfel
+                   "    \"userAnswer\": \"Ge både blodtrycksmedicinen och den smärtstillande som planerat\",\n" # Användarens felaktiga svar
                    "    \"message\": \"Det här valet skulle kunna utgöra en patientsäkerhetsrisk. När en patient uppvisar nya symptom som yrsel före administrering av blodtrycksmedicin är det viktigt att kontakta sjuksköterska eftersom:\",\n"
                    "    \"points\": [\n"
                    "      \"Blodtrycksmedicin kan förvärra yrsel om patienten redan har lågt blodtryck\",\n"
@@ -262,7 +265,8 @@ admin_prompt_config = [
                    "2. Fysiska objekt (t.ex. läkemedelsformer, medicinsk utrustning)\n"
                    "3. Konceptuella diagram (t.ex. ansvarsstrukturer, dokumentationsflöden)\n\n"
                    "När du refererar till en bild, koppla den tydligt till informationen du presenterar och förklara vad bilden visar. Exempel:\n"
-                   "\"För att förenkla kommunikationen med sjuksköterskor används ofta SBAR-modellen. SBAR är en strukturerad kommunikationsmetod med fyra komponenter: Situation, Bakgrund, Aktuellt tillstånd och Rekommendation. Se bilden nedan för en illustration av SBAR-modellen och hur den används i praktiken.\"\n\n"
+                   "\"För att förenkla kommunikationen med sjuksköterskor används ofta SBAR-modellen. SBAR är en strukturerad kommunikationsmetod med fyra komponenter: Situation, Bakgrund, Aktuellt tillstånd och Rekommendation. Se bilden nedan för en illustration av SBAR-modellen och hur den används i praktiken.\"\n"
+                   "![{bildens nyckel, t.ex. image1 beskrivning}]({bildens nyckel, t.ex. image1})\n\n"
                    "Använd bilder genomtänkt genom hela utbildningen, särskilt i samband med introduktion av nya begrepp."
     },
     {
@@ -275,17 +279,17 @@ admin_prompt_config = [
     },
     {
         "title": "Feedback:",
-        "content": "Vid fel svar: Ge kort korrigerande feedback (använd feedback JSON-formatet) baserad på typen av fel (kunskapsfel, procedurfel, prioriteringsfel, eller säkerhetsfel) och be användaren försöka igen med de klickbara alternativen, ge också användaren alternativen igen (genom att skicka samma interaktiva JSON igen).\n"
-                   "Vid rätt svar: Bekräfta användarens rätta svar, förstärk den viktigaste lärdomen, och gå samtidigt vidare till nästa del.\n"
+        "content": "Vid fel svar på en sluten fråga: Ge kort korrigerande feedback (använd ```json {\"feedback\": { ... }}``` formatet). Efter feedbacken, presentera frågan igen med samma alternativ så att användaren kan försöka på nytt. Skicka då samma ```json```-block för frågan (scenario, multipleChoice, etc.) som du skickade första gången.\n"
+                   "Vid rätt svar: Bekräfta användarens rätta svar, förstärk den viktigaste lärdomen, och gå samtidigt vidare till nästa del av utbildningen."
     },
     {
         "title": "Övriga viktiga överväganden:",
-        "content": "Varje meddelande som skickas ska avslutas med en uppmaning om att användaren ska använda rutan nedanför att svara på frågan alternativ klicka på knapparna för att svara. Nämn aldrig att du generar något via JSON format eller ```json block. Om användaren försöker byta ämne så är du trevlig men ser till att återgå till utbildningen. När du känner det lämpligt kan du använda kunskapsfrågor även för att ställa sant/falskt frågor eller fråga om användaren är redo att gå vidare eller om hen vill att du förklarar mer (använd 'suggestions' JSON-formatet för detta).\n"
-                   "Integrera de olika inlärningsteknikerna (scenarier, olika frågetyper, rollspel) naturligt genom utbildningen för att skapa en varierad och engagerande upplevelse. Anpassa svårighetsgraden baserat på användarens tidigare kunskaper och svar.\n"
+        "content": "Varje meddelande som skickas ska avslutas med en uppmaning om att användaren ska använda rutan nedanför att svara på frågan alternativt klicka på knapparna för att svara. Nämn aldrig att du genererar något via JSON format eller ```json block. Om användaren försöker byta ämne så är du trevlig men ser till att återgå till utbildningen. När du känner det lämpligt kan du använda frågor med svarsalternativ (suggestions JSON) även för att ställa sant/falskt frågor eller fråga om användaren är redo att gå vidare eller om hen vill att du förklarar mer.\n"
+                   "Integrera de olika inlärningsteknikerna (scenarier, olika frågetyper, rollspel) naturligt genom utbildningen för att skapa en varierad och engagerande upplevelse. Anpassa svårighetsgraden baserat på användarens tidigare kunskaper och svar."
     },
     {
         "title": "Avslutning:",
-        "content": "Innan du avslutar utbildningen ska du generera alla de frågor som användaren har svarat fel på minst en gång tidigare i utbildningen. När du gått igenom hela utbildningen och genererat uppföljningsfrågor med användaren och när användaren har visat förståelse för alla moment, ge en sammanfattning av allt ni gått igenom och tacka för visat intresse.\n"
+        "content": "Innan du avslutar utbildningen ska du generera alla de frågor som användaren har svarat fel på minst en gång tidigare i utbildningen. När du gått igenom hela utbildningen och genererat uppföljningsfrågor med användaren och när användaren har visat förståelse för alla moment, ge en sammanfattning av allt ni gått igenom och tacka för visat intresse."
     },
     {
         "title": "Bildresurser:",
@@ -309,7 +313,6 @@ admin_prompt_config = [
 
 # Define local image assets.
 # Uppdatera URL:erna för att matcha din Render-applikations URL eller en absolut sökväg
-# Om du kör lokalt, se till att host och port matchar din backend.
 # För Render, använd den publika URL:en. Ex: https://your-backend-app.onrender.com/static/images/image1.png
 BACKEND_BASE_URL = os.getenv('BACKEND_URL', 'http://localhost:10000') # Anpassa port om nödvändigt
 
@@ -318,7 +321,7 @@ image_assets = {
          "url": f"{BACKEND_BASE_URL}/static/images/image1.png",
          "description": "Denna bild illustrerar SBAR, använd i samband med att du förklarar det"
     },
-    # ... (resten av bilderna med uppdaterade URL:er)
+    # Lägg till resten av dina bilder här på samma sätt
      "image2": { "url": f"{BACKEND_BASE_URL}/static/images/image2.png", "description": "Beskrivning bild 2"},
      "image3": { "url": f"{BACKEND_BASE_URL}/static/images/image3.png", "description": "Beskrivning bild 3"},
      "image4": { "url": f"{BACKEND_BASE_URL}/static/images/image4.png", "description": "Beskrivning bild 4"},
@@ -405,6 +408,7 @@ def build_system_instruction(user_answers):
         # Ersätt bildplatshållare med faktiska lokala bildlänkar i markdown-format
         for key, asset in image_assets.items():
             placeholder = "{" + key + "}"
+            # Create markdown image link: ![Alt text](URL)
             replacement = f"![{asset['description']}]({asset['url']})"
             content = content.replace(placeholder, replacement)
 
@@ -428,7 +432,7 @@ def build_initial_history(user_answers, user_message, user_name):
         user_name: Användarens namn
 
     Returns:
-        En lista med meddelandeobjekt för första konversationen
+        En tuple: (greeting_text: str, history_for_session: list)
     """
     greeting = f"Välkommen {user_name} till delegeringsutbildningen!\n"
     greeting += "Jag är din lärare, du kan kalla mig Lexi. I denna utbildningen fokuserar vi på **läkemedelstilldelning via delegering**, för dig som jobbar i Skövde kommun.\n\n"
@@ -461,9 +465,6 @@ def build_initial_history(user_answers, user_message, user_name):
     )
 
     # Format för Gemini API
-    # OBS: Första meddelandet är AI:s hälsning, inte användarens.
-    # Gemini behöver oftast en användar-prompt för att svara, men vi vill *visa* AI:s hälsning först.
-    # Därför skickar vi den direkt i responsen och bygger historiken korrekt för nästa anrop.
     # Historiken som SPARS för sessionen bör starta med AI:s hälsning.
     history_for_session = [{
         "role": "model", # Korrekt roll för AI:s hälsning i historiken
@@ -474,6 +475,25 @@ def build_initial_history(user_answers, user_message, user_name):
 
     return greeting, history_for_session
 
+def get_gemini_model(user_answers):
+    """Konfigurerar och returnerar en Gemini-modellinstans."""
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY är inte definierat.")
+
+    genai.configure(api_key=GEMINI_API_KEY)
+    system_instruction_text = build_system_instruction(user_answers)
+    model = genai.GenerativeModel(
+        model_name='gemini-1.5-flash', # Using 1.5 flash as recommended
+        system_instruction=system_instruction_text,
+        generation_config={
+            "temperature": 1,
+            "top_p": 0.95,
+            "top_k": 64, # Adjusted based on common practices for 1.5
+            "max_output_tokens": 8192,
+            "response_mime_type": "text/plain", # Explicitly request text
+        }
+    )
+    return model
 
 @ai_bp.route('/api/chat', methods=['POST'])
 def chat():
@@ -489,44 +509,39 @@ def chat():
     if not user_message:
          return jsonify({"error": "Message cannot be empty"}), 400
 
-    current_hash = get_prompt_hash()
+    try:
+        current_hash = get_prompt_hash()
 
-    # --- Session Management ---
-    session = None
-    session_tuple = chat_sessions.get(user_name)
+        # --- Session Management ---
+        session = None
+        session_tuple = chat_sessions.get(user_name)
 
-    # Handle start message or prompt update
-    if user_message.strip().lower() == "start" or not session_tuple or session_tuple[1] != current_hash:
-        if user_message.strip().lower() == "start":
-            logger.info(f"Starting new session for {user_name} due to 'start' message.")
-            initial_greeting, history_for_session = build_initial_history(user_answers, user_message, user_name)
+        # Handle start message or prompt update
+        if user_message.strip().lower() == "start" or not session_tuple or session_tuple[1] != current_hash:
+            if user_message.strip().lower() == "start":
+                logger.info(f"Starting new session for {user_name} due to 'start' message.")
+                initial_greeting, history_for_session = build_initial_history(user_answers, user_message, user_name)
 
-            try:
-                system_instruction_text = build_system_instruction(user_answers)
-                model = genai.GenerativeModel(
-                    model_name='gemini-1.5-flash', # Using 1.5 flash as recommended
-                    system_instruction=system_instruction_text,
-                    generation_config={
-                        "temperature": 1,
-                        "top_p": 0.95,
-                        "top_k": 64, # Adjusted based on common practices for 1.5
-                        "max_output_tokens": 8192,
-                        "response_mime_type": "text/plain", # Explicitly request text
-                    }
-                )
+                model = get_gemini_model(user_answers)
                 session = model.start_chat(history=history_for_session) # Start with AI's greeting
                 chat_sessions[user_name] = (session, current_hash)
                 logger.info(f"New session created for {user_name} with hash {current_hash}")
 
-                # Parse the initial greeting itself (it might theoretically contain JSON)
+                # Parse the initial greeting itself
                 parsed_greeting = parse_ai_response(initial_greeting)
                 interactive_element = None
                 if parsed_greeting.get("interactiveJson"):
-                    first_key = next(iter(parsed_greeting["interactiveJson"]), None)
-                    interactive_element = {
-                        "type": first_key,
-                        "data": parsed_greeting["interactiveJson"]
-                    }
+                    # Determine the type based on keys in the parsed JSON
+                    interactive_type = None
+                    for key in parsed_greeting["interactiveJson"]:
+                        if key in INTERACTIVE_KEYS:
+                            interactive_type = INTERACTIVE_KEYS[key]
+                            break
+                    if interactive_type:
+                         interactive_element = {
+                            "type": interactive_type,
+                            "data": parsed_greeting["interactiveJson"] # Send the whole object
+                         }
 
                 return jsonify({
                     "reply": {
@@ -535,76 +550,55 @@ def chat():
                     }
                 })
 
-            except Exception as e:
-                logger.error(f"Fel vid skapande av chatt-session för {user_name}: {e}")
-                return jsonify({"error": "Kunde inte skapa chatt-session"}), 500
+            else: # Prompt updated or session missing
+                 if not session_tuple:
+                     logger.info(f"No session found for {user_name}. Creating new one.")
+                 else:
+                     logger.info(f"Prompt hash changed for {user_name}. Old: {session_tuple[1]}, New: {current_hash}. Creating new session.")
 
-        else: # Prompt updated or session missing
-             if not session_tuple:
-                 logger.info(f"No session found for {user_name}. Creating new one.")
-             else:
-                 logger.info(f"Prompt hash changed for {user_name}. Old: {session_tuple[1]}, New: {current_hash}. Creating new session.")
-
-             # Create a new session but don't return the greeting, process the current message
-             _ , history_for_session = build_initial_history(user_answers, user_message, user_name) # Get history structure
-             try:
-                 system_instruction_text = build_system_instruction(user_answers)
-                 model = genai.GenerativeModel(
-                     model_name='gemini-1.5-flash',
-                     system_instruction=system_instruction_text,
-                    generation_config={
-                        "temperature": 1,
-                        "top_p": 0.95,
-                        "top_k": 64,
-                        "max_output_tokens": 8192,
-                        "response_mime_type": "text/plain",
-                    }
-                 )
+                 # Create a new session but don't return the greeting, process the current message
+                 _ , history_for_session = build_initial_history(user_answers, user_message, user_name) # Get history structure
+                 model = get_gemini_model(user_answers)
                  session = model.start_chat(history=history_for_session) # Use history starting with AI greeting
                  chat_sessions[user_name] = (session, current_hash)
                  logger.info(f"New session created for {user_name} after prompt update/missing session.")
-             except Exception as e:
-                 logger.error(f"Fel vid skapande av ny chatt-session (update/missing) för {user_name}: {e}")
-                 return jsonify({"error": "Kunde inte starta ny chatt-session"}), 500
 
-    else: # Existing session, prompt unchanged
-        session, _ = session_tuple
-        logger.info(f"Using existing session for {user_name}")
+        else: # Existing session, prompt unchanged
+            session, _ = session_tuple
+            logger.info(f"Using existing session for {user_name}")
 
-    # --- Generate AI Reply ---
-    if not session:
-         logger.error(f"Session object is unexpectedly None for user {user_name}")
-         return jsonify({"error": "Chat session not available."}), 500
+        # --- Generate AI Reply ---
+        if not session:
+             # This case should ideally not be reached due to the logic above
+             logger.error(f"Session object is unexpectedly None for user {user_name}")
+             return jsonify({"error": "Chat session not available."}), 500
 
-    try:
         logger.info(f"Sending message to Gemini for {user_name}: '{user_message[:50]}...'")
-        # Ensure history is correctly managed
-        # Add user message to history before sending
-        # session.history.append({"role": "user", "parts": [{"text": user_message}]}) # This modifies internal state directly - maybe risky?
-        # Instead, rely on send_message to handle history implicitly
-
         response = session.send_message(content=user_message)
 
-        # Extract raw text reply
-        # Gemini 1.5 might return content directly in response.text if simple
+        # Extract raw text reply safely
         ai_reply_raw = ""
-        if hasattr(response, 'text'):
-             ai_reply_raw = response.text
-        elif hasattr(response, 'parts') and response.parts:
-             text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
-             ai_reply_raw = "\n".join(text_parts).strip()
-        else:
-             logger.warning(f"Unexpected response structure from Gemini for {user_name}: {response}")
-             ai_reply_raw = "Jag kunde inte generera ett svar just nu."
+        try:
+            if hasattr(response, 'text'):
+                 ai_reply_raw = response.text or ""
+            elif hasattr(response, 'parts') and response.parts:
+                 text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
+                 ai_reply_raw = "\n".join(text_parts).strip()
+            else:
+                 logger.warning(f"Unexpected response structure from Gemini for {user_name}: {response}")
+                 ai_reply_raw = "Jag kunde inte generera ett svar just nu."
+        except Exception as extract_err:
+             logger.error(f"Error extracting text from Gemini response for {user_name}: {extract_err}")
+             ai_reply_raw = "Ett internt fel uppstod vid bearbetning av svaret."
+
 
         logger.info(f"Received raw reply from Gemini for {user_name}: '{ai_reply_raw[:100]}...'")
 
-        # Add AI response to history (explicitly needed if not using stream?)
-        # Check Gemini library docs - start_chat should handle history implicitly with send_message
-        # Let's assume history is managed by the library for now.
-
+    except ValueError as ve: # Handle missing API key
+        logger.error(f"Configuration error for {user_name}: {ve}")
+        return jsonify({"error": str(ve)}), 500
     except Exception as e:
-        logger.error(f"Fel vid Gemini API-anrop för {user_name}: {e}")
+        logger.error(f"Error during chat processing for {user_name}: {e}", exc_info=True)
         # Provide a user-friendly error message in the standard format
         return jsonify({
             "reply": {
@@ -620,20 +614,20 @@ def chat():
     # --- Construct the New API Response Structure ---
     interactive_element_response = None
     if parsed_response["interactiveJson"]:
-        # Determine the 'type' from the first key of the JSON data
-        # Make sure interactiveJson is not empty
-        if parsed_response["interactiveJson"]:
-             interactive_type = next(iter(parsed_response["interactiveJson"]), None)
-             if interactive_type:
-                 interactive_element_response = {
-                     "type": interactive_type,
-                     "data": parsed_response["interactiveJson"] # Send the whole parsed JSON dict as data
-                 }
-             else:
-                  logger.warning(f"Parsed JSON for {user_name} was empty or had no keys.")
+        # Determine the 'type' from the first matching known key
+        interactive_type = None
+        if isinstance(parsed_response["interactiveJson"], dict):
+            for key in parsed_response["interactiveJson"]:
+                if key in INTERACTIVE_KEYS:
+                    interactive_type = INTERACTIVE_KEYS[key]
+                    break
+        if interactive_type:
+            interactive_element_response = {
+                "type": interactive_type,
+                "data": parsed_response["interactiveJson"] # Send the whole parsed JSON dict as data
+            }
         else:
-             logger.warning(f"interactiveJson was present but empty for {user_name}")
-
+            logger.warning(f"Parsed JSON for {user_name} did not contain a known interactive key.")
 
     final_response = {
         "reply": {
@@ -648,7 +642,20 @@ def chat():
 # Prompt Editor endpoint är borttagen.
 
 
+# Serve static files for images - Keep this within the blueprint if possible, or move to app.py if cleaner
+# Using app.py is generally preferred for top-level static serving.
+# If keeping here, ensure the path matches the base URL construction.
+# @ai_bp.route('/static/<path:path>')
+# def serve_static_ai(path):
+#    # This might conflict with app.py's static serving if not careful
+#    logger.info(f"AI Blueprint attempting to serve static file: {path}")
+#    # Construct path relative to the blueprint's location might be complex.
+#    # It's usually better handled by the main app instance.
+#    # return send_from_directory('static', path) # Example, likely needs adjustment
+
+
 if __name__ == '__main__':
+    # This block is for local development testing only
     from flask import Flask
     from flask_cors import CORS
 
@@ -657,17 +664,22 @@ if __name__ == '__main__':
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     app.register_blueprint(ai_bp)
 
-    # Serve static files for images
+    # Serve static files for images (needed for local dev if URLs point here)
     @app.route('/static/<path:path>')
-    def serve_static(path):
-        return send_from_directory('static', path)
+    def serve_static_local(path):
+        # Assuming static is in the same directory as ai.py when run directly
+        static_dir = os.path.join(os.path.dirname(__file__), 'static')
+        logger.info(f"Dev server serving static file: {path} from {static_dir}")
+        return send_from_directory(static_dir, path)
 
     # Använd PORT miljövariabeln för Render eller 10000 som standard
     port = int(os.environ.get('PORT', 10000))
     # Ensure the static folder exists
-    if not os.path.exists('static/images'):
-         os.makedirs('static/images', exist_ok=True)
-         print("Created static/images directory.")
+    static_images_dir_local = os.path.join(os.path.dirname(__file__), 'static', 'images')
+    if not os.path.exists(static_images_dir_local):
+         os.makedirs(static_images_dir_local, exist_ok=True)
+         print(f"Created directory for local dev: {static_images_dir_local}")
 
     print(f"Starting development server on http://0.0.0.0:{port}")
+    # Set debug=True only for local development
     app.run(host='0.0.0.0', port=port, debug=True)
