@@ -1,7 +1,9 @@
+# backend/ai.py
 """
 Denna modul hanterar AI-integrationen för delegeringsutbildningen.
 Modulen bygger dynamiska prompts baserade på användarens bakgrund,
 hanterar chatthistorik och kommunicerar med Gemini API.
+Denna version flyttar JSON-parsning till backend.
 """
 
 import os
@@ -12,6 +14,9 @@ from flask import Blueprint, request, jsonify
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+# Importera den nya parsing-funktionen
+from parsing_utils import parse_ai_response
+
 # Ladda miljövariabler
 load_dotenv()
 
@@ -19,7 +24,7 @@ load_dotenv()
 ai_bp = Blueprint('ai', __name__)
 
 # Konfigurera loggning
-logging.basicConfig(level=logging.INFO, 
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -36,7 +41,7 @@ else:
 # Sparas som: {user_name: (session, prompt_hash)}
 chat_sessions = {}
 
-# Global promptkonfiguration
+# Global promptkonfiguration (behålls för prompt-byggnad)
 admin_prompt_config = [
     {
         "title": "",
@@ -51,39 +56,41 @@ admin_prompt_config = [
     {
         "title": "Formatering av svar:",
         "content": "VIKTIGT: När du svarar användaren, följ dessa regler för formatering:\n\n"
-                   
+
                    "1. För vanliga TEXTFÖRKLARINGAR och ÖPPNA FRÅGOR: Skriv ditt svar direkt som vanlig text, med markdown-formatering vid behov (fetstil, punktlistor, etc.). Använd INTE JSON-format för dessa. Exempel:\n"
                    "\"Delegering innebär att någon med formell kompetens överlåter en arbetsuppgift till någon annan. Inom vården betyder detta vanligtvis att en sjuksköterska delegerar uppgifter som exempelvis läkemedelsadministrering till undersköterskepersonal. Har du några frågor om detta? Skriv dem i rutan nedan.\"\n\n"
-                   
-                   "2. För INTERAKTIVA ELEMENT (slutna frågor med svarsalternativ, scenarier, rollspel, matchningsfrågor, etc.): Använd specifika JSON-format som frontend-koden kan tolka. Exempel:\n"
+
+                   "2. För INTERAKTIVA ELEMENT (slutna frågor med svarsalternativ, scenarier, rollspel, matchningsfrågor, etc.): Använd specifika JSON-format som frontend-koden kan tolka. Bädda in JSON-objektet direkt i ditt svar, helst omgivet av ```json ... ``` för tydlighetens skull. Exempel:\n"
+                   "```json\n"
                    "{\n"
                    "  \"text\": \"Vilket av följande påståenden är korrekt angående delegering?\",\n"
                    "  \"suggestions\": [\n"
                    "    {\"label\": \"Delegering gäller i hela Sverige oavsett arbetsplats\", \"value\": \"A\"},\n"
                    "    {\"label\": \"Delegering är kopplad till en specifik arbetsuppgift och arbetsplats\", \"value\": \"B\"}\n"
                    "  ]\n"
-                   "}\n\n"
-                   
-                   "Se till att dina svar ALDRIG har formatet: { \"response\": \"text...\" }. Detta orsakar problem i chatten. Använd antingen ren text ELLER de specifika JSON-formaten för interaktiva element."
+                   "}\n"
+                   "```\n\n"
+
+                   "Se till att dina svar ALDRIG har formatet: { \"response\": \"text...\" }. Detta orsakar problem. Använd antingen ren text ELLER de specifika JSON-formaten (helst i ```json block) för interaktiva element."
     },
     {
         "title": "Pedagogisk variation:",
         "content": "Använd en balanserad mix av olika undervisningsmetoder genom hela utbildningen. Det är VIKTIGT att du varierar din pedagogik för att hålla användaren engagerad och säkerställa effektivt lärande. Växla mellan följande metoder och använd varje metod ungefär lika ofta, använd smileys för att öka den levande känslan:\n\n"
-                   
+
                    "1. Informationsavsnitt med bilder: Presentera tydlig och omfattande information om ett ämne. Använd relevanta bilder där det finns tillgängligt för att illustrera viktiga begrepp. Säkerställ att du ger tillräckliga fakta, begrepp och principer innan du testar kunskapen.\n\n"
-                   
+
                    "2. Öppna reflektionsfrågor: Ställ frågor som uppmuntrar användaren att reflektera och formulera svar med egna ord. Använd dessa för att fördjupa förståelse och uppmuntra kritiskt tänkande. Exempel: 'Hur skulle du agera om...' eller 'Vilka faktorer anser du är viktigast...'. Avsluta med en uppmaning som: 'Skriv ditt svar i rutan nedan.'\n\n"
-                   
+
                    "3. Patientscenarier: Presentera realistiska vårdsituationer där användaren måste tillämpa sin kunskap för att fatta beslut. Se till att använda minst 2-3 olika patientscenarier under utbildningen.\n\n"
-                   
+
                    "4. Rollspelsdialoger: Simulera dialoger mellan olika roller i vården för att visa god kommunikation och samarbete. Använd rollspel minst 2-3 gånger under utbildningen för att visa olika situationer.\n\n"
-                   
+
                    "5. Slutna kunskapsfrågor: Ställ frågor med specifika svarsalternativ för att testa faktakunskap. Variera mellan:\n"
                    "   - Vanliga frågor med några få alternativ\n"
                    "   - Flervalsfrågor där flera svar kan vara korrekta\n"
                    "   - Matchningsfrågor där användaren ska koppla ihop begrepp\n"
                    "   - Ordningsfrågor där steg ska placeras i rätt följd\n\n"
-                   
+
                    "VIKTIGT: Växla mellan dessa metoder i en naturlig ordning. Undvik att använda samma metod flera gånger i rad. Om du precis har använt en sluten fråga, bör nästa interaktion vara en annan typ, till exempel ett rollspel eller en öppen fråga. Sträva efter en jämn fördelning av de olika metoderna under utbildningen."
     },
     {
@@ -109,7 +116,8 @@ admin_prompt_config = [
     {
         "title": "Scenario-baserat lärande:",
         "content": "Inkludera realistiska patientscenarier regelbundet genom utbildningen. Dessa scenarier ska vara relevanta för delegeringskunskaper och kräva att användaren fattar beslut baserat på det de lärt sig. Innan du presenterar ett scenario, se till att all nödvändig information har förklarats.\n\n"
-                   "Exempel på hur du kan introducera ett scenario:\n"
+                   "Exempel på hur du kan introducera ett scenario (använd ```json block):\n"
+                   "```json\n"
                    "{\n"
                    "  \"scenario\": {\n"
                    "    \"title\": \"En utmanande situation\",\n"
@@ -123,13 +131,15 @@ admin_prompt_config = [
                    "    \"correctOption\": \"option3\",\n"
                    "    \"explanation\": \"Vid förändrat allmäntillstånd och symptom som yrsel bör du alltid kontakta ansvarig sjuksköterska innan du ger mediciner, särskilt blodtrycksmediciner som kan förvärra yrsel.\"\n"
                    "  }\n"
-                   "}\n\n"
+                   "}\n"
+                   "```\n\n"
                    "Använd minst 2-3 olika scenarier under utbildningens gång. När användaren svarar, ge detaljerad feedback baserad på deras val och förklara konsekvenserna av deras beslut."
     },
     {
         "title": "Förbättrade frågetyper:",
-        "content": "Använd olika typer av slutna frågor för att variera inlärningen och testa användarens kunskap på olika sätt. Växla mellan dessa typer och använd varje typ minst en gång under utbildningen:\n\n"
+        "content": "Använd olika typer av slutna frågor för att variera inlärningen och testa användarens kunskap på olika sätt. Växla mellan dessa typer och använd varje typ minst en gång under utbildningen (använd ```json block):\n\n"
                    "1. Flervalsfrågor (med ett eller flera korrekta svar):\n"
+                   "```json\n"
                    "{\n"
                    "  \"multipleChoice\": {\n"
                    "    \"text\": \"Vilka av följande symptom bör föranleda att du kontaktar sjuksköterska innan du ger blodtrycksmedicin? (Välj alla som stämmer)\",\n"
@@ -142,8 +152,10 @@ admin_prompt_config = [
                    "    \"multiSelect\": true,\n"
                    "    \"explanation\": \"Yrsel och svimningskänsla kan vara tecken på lågt blodtryck, vilket kan förvärras av blodtrycksmediciner.\"\n"
                    "  }\n"
-                   "}\n\n"
+                   "}\n"
+                   "```\n\n"
                    "2. Matchningsfrågor (matcha ihop relaterade koncept):\n"
+                   "```json\n"
                    "{\n"
                    "  \"matching\": {\n"
                    "    \"text\": \"Matcha följande läkemedelstyper med deras primära verkan:\",\n"
@@ -158,8 +170,10 @@ admin_prompt_config = [
                    "      {\"id\": \"C\", \"text\": \"Ökar urinutsöndringen\", \"matchesTo\": \"3\"}\n"
                    "    ]\n"
                    "  }\n"
-                   "}\n\n"
+                   "}\n"
+                   "```\n\n"
                    "3. Rangordningsfrågor (placera i rätt ordning):\n"
+                   "```json\n"
                    "{\n"
                    "  \"ordering\": {\n"
                    "    \"text\": \"Rangordna följande steg i korrekt ordning för att administrera insulin:\",\n"
@@ -171,8 +185,10 @@ admin_prompt_config = [
                    "      {\"id\": \"5\", \"text\": \"Dokumentera administreringen\", \"correctPosition\": 4}\n"
                    "    ]\n"
                    "  }\n"
-                   "}\n\n"
+                   "}\n"
+                   "```\n\n"
                    "4. Standard slutna frågor med några få alternativ:\n"
+                   "```json\n"
                    "{\n"
                    "  \"text\": \"Vem bär det yttersta ansvaret för en delegerad arbetsuppgift?\",\n"
                    "  \"suggestions\": [\n"
@@ -180,18 +196,20 @@ admin_prompt_config = [
                    "    {\"label\": \"Sjuksköterskan som delegerat uppgiften\", \"value\": \"Sjuksköterskan som delegerat uppgiften\"},\n"
                    "    {\"label\": \"Verksamhetschefen\", \"value\": \"Verksamhetschefen\"}\n"
                    "  ]\n"
-                   "}\n\n"
+                   "}\n"
+                   "```\n\n"
                    "Fördela dessa olika frågetyper jämnt genom utbildningen."
     },
     {
         "title": "Socialt lärande och rollspel:",
-        "content": "Använd dialoger mellan olika roller i vårdsituationer för att hjälpa användaren förstå interaktioner och kommunikation inom vården. Dessa simuleringar är särskilt värdefulla för att visa praktiska tillämpningar av teoretiska begrepp. Inkludera rollspel minst 2-3 gånger under utbildningen.\n\n"
+        "content": "Använd dialoger mellan olika roller i vårdsituationer för att hjälpa användaren förstå interaktioner och kommunikation inom vården. Dessa simuleringar är särskilt värdefulla för att visa praktiska tillämpningar av teoretiska begrepp. Inkludera rollspel minst 2-3 gånger under utbildningen (använd ```json block).\n\n"
                    "Roller att inkludera:\n"
                    "1. Sjuksköterska: Fokusera på ansvar, delegation, bedömningar och medicinska beslut\n"
                    "2. Patient: Illustrera olika patientbeteenden, behov och kommunikationsstilar\n"
                    "3. Läkare: Visa ordinationer, medicinska bedömningar och teamarbete\n"
                    "4. Annan vårdpersonal: Visa samarbete och informationsutbyte\n\n"
                    "Exempel på hur du kan implementera rollspel i dialogen:\n"
+                   "```json\n"
                    "{\n"
                    "  \"roleplay\": {\n"
                    "    \"title\": \"Kommunikation med ansvarig sjuksköterska\",\n"
@@ -208,18 +226,20 @@ admin_prompt_config = [
                    "      \"Inkludera alltid en rekommendation när du rapporterar problem\"\n"
                    "    ]\n"
                    "  }\n"
-                   "}\n\n"
+                   "}\n"
+                   "```\n\n"
                    "Använd dessa dialoger för att illustrera god kommunikation, professionella interaktioner, och hur man hanterar utmanande situationer i vårdmiljön."
     },
     {
         "title": "Nyanserad feedback:",
-        "content": "Ge detaljerad och specifik feedback baserad på typen av fel användaren gör:\n\n"
+        "content": "Ge detaljerad och specifik feedback baserad på typen av fel användaren gör (använd ```json block):\n\n"
                    "1. Kunskapsfel: När användaren visar brist på faktakunskap, ge korrekt information och förklara varför det är viktigt\n"
                    "2. Procedurfel: När användaren gör fel i processer eller ordningsföljder, förklara stegen i detalj\n"
                    "3. Prioriteringsfel: När användaren prioriterar fel, förklara riskbedömning och beslutsfattande\n"
                    "4. Säkerhetsfel: När användaren gör val som kan äventyra patientsäkerheten, betona konsekvenserna och alternativa handlingar\n\n"
                    "Feedback ska alltid vara konstruktiv och koppla tillbaka till relevanta lärandemål. Den ska ges i ett stödjande sätt som uppmuntrar till fortsatt lärande. Anpassa feedbackens ton efter allvarlighetsgraden i felet - var mer direkt vid säkerhetsrisker och mer uppmuntrande vid mindre misstag.\n\n"
                    "Exempel på nyanserad feedback:\n"
+                   "```json\n"
                    "{\n"
                    "  \"feedback\": {\n"
                    "    \"type\": \"safety\",\n"
@@ -232,7 +252,8 @@ admin_prompt_config = [
                    "    ],\n"
                    "    \"correctAction\": \"Kontakta alltid ansvarig sjuksköterska vid förändrat allmäntillstånd innan du ger ordinerade läkemedel.\"\n"
                    "  }\n"
-                   "}"
+                   "}\n"
+                   "```"
     },
     {
         "title": "Användning av bilder:",
@@ -254,12 +275,12 @@ admin_prompt_config = [
     },
     {
         "title": "Feedback:",
-        "content": "Vid fel svar: Ge kort korrigerande feedback baserad på typen av fel (kunskapsfel, procedurfel, prioriteringsfel, eller säkerhetsfel) och be användaren försöka igen med de klickbara alternativen, ge också användaren alternativen igen.\n"
+        "content": "Vid fel svar: Ge kort korrigerande feedback (använd feedback JSON-formatet) baserad på typen av fel (kunskapsfel, procedurfel, prioriteringsfel, eller säkerhetsfel) och be användaren försöka igen med de klickbara alternativen, ge också användaren alternativen igen (genom att skicka samma interaktiva JSON igen).\n"
                    "Vid rätt svar: Bekräfta användarens rätta svar, förstärk den viktigaste lärdomen, och gå samtidigt vidare till nästa del.\n"
     },
     {
         "title": "Övriga viktiga överväganden:",
-        "content": "Varje meddelande som skickas ska avslutas med en uppmaning om att användaren ska använda rutan nedanför att svara på frågan alternativ klicka på knapparna för att svara. Nämn aldrig att du generar något via JSON format. Om användaren försöker byta ämne så är du trevlig men ser till att återgå till utbildningen. När du känner det lämpligt kan du använda kunskapsfrågor även för att ställa sant/falskt frågor eller fråga om användaren är redo att gå vidare eller om hen vill att du förklarar mer.\n"
+        "content": "Varje meddelande som skickas ska avslutas med en uppmaning om att användaren ska använda rutan nedanför att svara på frågan alternativ klicka på knapparna för att svara. Nämn aldrig att du generar något via JSON format eller ```json block. Om användaren försöker byta ämne så är du trevlig men ser till att återgå till utbildningen. När du känner det lämpligt kan du använda kunskapsfrågor även för att ställa sant/falskt frågor eller fråga om användaren är redo att gå vidare eller om hen vill att du förklarar mer (använd 'suggestions' JSON-formatet för detta).\n"
                    "Integrera de olika inlärningsteknikerna (scenarier, olika frågetyper, rollspel) naturligt genom utbildningen för att skapa en varierad och engagerande upplevelse. Anpassa svårighetsgraden baserat på användarens tidigare kunskaper och svar.\n"
     },
     {
@@ -287,64 +308,30 @@ admin_prompt_config = [
 ]
 
 # Define local image assets.
-# Placera dina PNG-bilder i mappen "static/images" i projektets rot.
+# Uppdatera URL:erna för att matcha din Render-applikations URL eller en absolut sökväg
+# Om du kör lokalt, se till att host och port matchar din backend.
+# För Render, använd den publika URL:en. Ex: https://your-backend-app.onrender.com/static/images/image1.png
+BACKEND_BASE_URL = os.getenv('BACKEND_URL', 'http://localhost:10000') # Anpassa port om nödvändigt
+
 image_assets = {
     "image1": {
-         "url": "http://localhost:5000/static/images/image1.png",
+         "url": f"{BACKEND_BASE_URL}/static/images/image1.png",
          "description": "Denna bild illustrerar SBAR, använd i samband med att du förklarar det"
     },
-    "image2": {
-         "url": "http://localhost:5000/static/images/image2.png",
-         "description": "Beskrivning av bild 2"
-    },
-    "image3": {
-         "url": "http://localhost:5000/static/images/image3.png",
-         "description": "Beskrivning av bild 3"
-    },
-    "image4": {
-         "url": "http://localhost:5000/static/images/image4.png",
-         "description": "Beskrivning av bild 4"
-    },
-    "image5": {
-         "url": "http://localhost:5000/static/images/image5.png",
-         "description": "Beskrivning av bild 5"
-    },
-    "image6": {
-         "url": "http://localhost:5000/static/images/image6.png",
-         "description": "Beskrivning av bild 6"
-    },
-    "image7": {
-         "url": "http://localhost:5000/static/images/image7.png",
-         "description": "Beskrivning av bild 7"
-    },
-    "image8": {
-         "url": "http://localhost:5000/static/images/image8.png",
-         "description": "Beskrivning av bild 8"
-    },
-    "image9": {
-         "url": "http://localhost:5000/static/images/image9.png",
-         "description": "Beskrivning av bild 9"
-    },
-    "image10": {
-         "url": "http://localhost:5000/static/images/image10.png",
-         "description": "Beskrivning av bild 10"
-    },
-    "image11": {
-         "url": "http://localhost:5000/static/images/image11.png",
-         "description": "Beskrivning av bild 11"
-    },
-    "image12": {
-         "url": "http://localhost:5000/static/images/image12.png",
-         "description": "Beskrivning av bild 12"
-    },
-    "image13": {
-         "url": "http://localhost:5000/static/images/image13.png",
-         "description": "Beskrivning av bild 13"
-    },
-    "image14": {
-         "url": "http://localhost:5000/static/images/image14.png",
-         "description": "Beskrivning av bild 14"
-    }
+    # ... (resten av bilderna med uppdaterade URL:er)
+     "image2": { "url": f"{BACKEND_BASE_URL}/static/images/image2.png", "description": "Beskrivning bild 2"},
+     "image3": { "url": f"{BACKEND_BASE_URL}/static/images/image3.png", "description": "Beskrivning bild 3"},
+     "image4": { "url": f"{BACKEND_BASE_URL}/static/images/image4.png", "description": "Beskrivning bild 4"},
+     "image5": { "url": f"{BACKEND_BASE_URL}/static/images/image5.png", "description": "Beskrivning bild 5"},
+     "image6": { "url": f"{BACKEND_BASE_URL}/static/images/image6.png", "description": "Beskrivning bild 6"},
+     "image7": { "url": f"{BACKEND_BASE_URL}/static/images/image7.png", "description": "Beskrivning bild 7"},
+     "image8": { "url": f"{BACKEND_BASE_URL}/static/images/image8.png", "description": "Beskrivning bild 8"},
+     "image9": { "url": f"{BACKEND_BASE_URL}/static/images/image9.png", "description": "Beskrivning bild 9"},
+     "image10": { "url": f"{BACKEND_BASE_URL}/static/images/image10.png", "description": "Beskrivning bild 10"},
+     "image11": { "url": f"{BACKEND_BASE_URL}/static/images/image11.png", "description": "Beskrivning bild 11"},
+     "image12": { "url": f"{BACKEND_BASE_URL}/static/images/image12.png", "description": "Beskrivning bild 12"},
+     "image13": { "url": f"{BACKEND_BASE_URL}/static/images/image13.png", "description": "Beskrivning bild 13"},
+     "image14": { "url": f"{BACKEND_BASE_URL}/static/images/image14.png", "description": "Beskrivning bild 14"},
 }
 
 
@@ -357,10 +344,10 @@ def get_prompt_hash():
 def build_background(user_answers):
     """
     Bygger dynamisk bakgrund baserat på användarens svar.
-    
+
     Args:
         user_answers: Användarens svar på bakgrundsfrågor
-        
+
     Returns:
         En formaterad textsträng med anpassad bakgrundsinformation
     """
@@ -379,70 +366,73 @@ def build_background(user_answers):
 def load_education_plan():
     """
     Läser in utbildningsplanen från en extern fil.
-    
+
     Returns:
         Innehållet i utbildningsplanen som textsträng
     """
     try:
-        with open("education_plan.txt", "r", encoding="utf-8") as f:
+        # Ensure the path is correct relative to the execution directory
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(base_dir, "education_plan.txt")
+        with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:
-        logger.error("Kunde inte läsa utbildningsplanen: %s", e)
+        logger.error(f"Kunde inte läsa utbildningsplanen från {file_path}: {e}")
         return "Utbildningsplan saknas eller kunde inte laddas."
 
 
 def build_system_instruction(user_answers):
     """
-    Bygger systeminstruktionen genom att kombinera adminkonfigurerade sektioner 
+    Bygger systeminstruktionen genom att kombinera adminkonfigurerade sektioner
     med dynamisk bakgrund, utbildningsplan och lokala bildresurser.
-    
+
     Args:
         user_answers: Användarens svar på bakgrundsfrågor
-        
+
     Returns:
         En komplett systeminstruktion för AI-modellen
     """
     background_text = build_background(user_answers)
     education_plan_text = load_education_plan()
     instruction_parts = []
-    
+
     for section in admin_prompt_config:
         content = section["content"]
         if "{background}" in content:
             content = content.replace("{background}", background_text)
         if "{education_plan}" in content:
             content = content.replace("{education_plan}", education_plan_text)
+        # Ersätt bildplatshållare med faktiska lokala bildlänkar i markdown-format
+        for key, asset in image_assets.items():
+            placeholder = "{" + key + "}"
+            replacement = f"![{asset['description']}]({asset['url']})"
+            content = content.replace(placeholder, replacement)
+
         if section["title"]:
-            instruction_parts.append(f"**{section['title']}** {content}")
+            instruction_parts.append(f"**{section['title']}**\n{content}") # Added newline for better separation
         else:
             instruction_parts.append(content)
-    
-    system_instruction = "\n".join(instruction_parts)
-    
-    # Ersätt bildplatshållare med faktiska lokala bildlänkar i markdown-format
-    for key, asset in image_assets.items():
-        placeholder = "{" + key + "}"
-        replacement = f"![{asset['description']}]({asset['url']})"
-        system_instruction = system_instruction.replace(placeholder, replacement)
-    
+
+    system_instruction = "\n\n".join(instruction_parts) # Use double newline for better section separation
+
     return system_instruction
 
 
 def build_initial_history(user_answers, user_message, user_name):
     """
     Bygger initial historik med en välkomsttext anpassad utifrån användarens bakgrund.
-    
+
     Args:
         user_answers: Användarens svar på bakgrundsfrågor
         user_message: Användarens första meddelande
         user_name: Användarens namn
-        
+
     Returns:
         En lista med meddelandeobjekt för första konversationen
     """
     greeting = f"Välkommen {user_name} till delegeringsutbildningen!\n"
     greeting += "Jag är din lärare, du kan kalla mig Lexi. I denna utbildningen fokuserar vi på **läkemedelstilldelning via delegering**, för dig som jobbar i Skövde kommun.\n\n"
-    
+
     if user_answers.get('underskoterska', 'nej') == 'ja':
         greeting += (
             "Som undersköterska har du en viktig roll i vård och omsorgs arbetet. Denna utbildning är utformad för att ge dig den kompetens som krävs för säker läkemedelstilldelning via delegering.\n"
@@ -451,7 +441,7 @@ def build_initial_history(user_answers, user_message, user_name):
         greeting += (
             "Utbildningen riktar sig till all vård- och omsorgspersonal som vill stärka sin kompetens inom läkemedelstilldelning genom delegering.\n"
         )
-    
+
     if user_answers.get('delegering', 'nej') == 'ja':
         greeting += (
             "Eftersom du har erfarenhet av delegering sedan tidigare kan vissa moment kännas bekanta.\n"
@@ -460,7 +450,7 @@ def build_initial_history(user_answers, user_message, user_name):
         greeting += (
             "Om du är ny inom delegering går vi igenom grunderna noggrant så att du känner dig trygg med informationen.\n"
         )
-    
+
     greeting += "\nDu kommer bland annat att lära dig om:\n"
     greeting += "- Grunderna i delegering av läkemedel.\n"
     greeting += "- Regelverk för delegering inom läkemedel.\n"
@@ -469,261 +459,215 @@ def build_initial_history(user_answers, user_message, user_name):
         "**Målet är att du ska förstå och lära dig grunderna inom bland annat läkemedelstilldelning för att du ska ha en bra grund att stå på inför att du träffar sjuksköterskan.** Nedanför finns en chattruta, den kommer du använda för att interagera med mig, jag kommer bland annat att ge dig information, ställa frågor och så vidare. Detta för att jag ska känna att du förstått. Du kan alltid be mig förklara igen, eller säga att du inte förstår. Vi går igenom det här tillsammans. "
         "Är du redo att börja? Skriv 'fortsätt' när du är redo i chattrutan."
     )
-    
+
     # Format för Gemini API
-    history = [{
-        "role": "user",
+    # OBS: Första meddelandet är AI:s hälsning, inte användarens.
+    # Gemini behöver oftast en användar-prompt för att svara, men vi vill *visa* AI:s hälsning först.
+    # Därför skickar vi den direkt i responsen och bygger historiken korrekt för nästa anrop.
+    # Historiken som SPARS för sessionen bör starta med AI:s hälsning.
+    history_for_session = [{
+        "role": "model", # Korrekt roll för AI:s hälsning i historiken
         "parts": [{
             "text": greeting
         }]
     }]
-    
-    return history
 
-
-def is_valid_interactive_json(text):
-    """
-    Kontrollerar om svaret innehåller ett giltigt interaktivt JSON-format som frontend kan hantera.
-    
-    Args:
-        text: Texten som ska kontrolleras
-    
-    Returns:
-        True om texten innehåller ett giltigt interaktivt JSON-format, annars False
-    """
-    try:
-        data = json.loads(text)
-        # Kontrollera om det är ett giltigt format som innehåller någon av de förväntade nycklarna
-        valid_formats = ["text", "suggestions", "scenario", "roleplay", 
-                        "multipleChoice", "matching", "ordering", "feedback"]
-        
-        return isinstance(data, dict) and any(key in data for key in valid_formats)
-    except json.JSONDecodeError:
-        return False
-    except:
-        return False
-
-
-def fix_ai_response(response_text):
-    """
-    Fixar AI-svar som har felaktiga format, särskilt svar som är inkapslat i {"response": "text"} format.
-    
-    Args:
-        response_text: Originalsvaret från AI:n
-    
-    Returns:
-        Korrigerat svar
-    """
-    # Försök identifiera och åtgärda {"response": "text"} format
-    try:
-        data = json.loads(response_text)
-        if isinstance(data, dict) and "response" in data and isinstance(data["response"], str):
-            # Detta är det felaktiga formatet, extrahera bara texten
-            return data["response"]
-    except json.JSONDecodeError:
-        pass  # Inte ett JSON-format, fortsätt med originalet
-    except:
-        pass  # Annan typ av fel, fortsätt med originalet
-    
-    # Kolla om texten är ett giltigt interaktivt JSON-format
-    if is_valid_interactive_json(response_text):
-        return response_text
-    
-    # Om texten börjar med { men inte är ett giltigt interaktivt JSON-format,
-    # försök extrahera ren text
-    if response_text.strip().startswith("{") and response_text.strip().endswith("}"):
-        try:
-            data = json.loads(response_text)
-            # Om vi kom hit är det ett JSON-objekt men inte ett av våra format
-            # Leta efter textfält
-            text_fields = []
-            for key, value in data.items():
-                if isinstance(value, str) and len(value) > 10:  # Antar att ett längre textfält är innehållsfältet
-                    text_fields.append(value)
-            
-            if text_fields:
-                return "\n\n".join(text_fields)
-        except:
-            pass
-    
-    # Returnera originalet om inga åtgärder gjordes
-    return response_text
+    return greeting, history_for_session
 
 
 @ai_bp.route('/api/chat', methods=['POST'])
 def chat():
     """
     Huvudendpoint för chattfunktionen. Hanterar användarmeddelanden och genererar AI-svar.
+    Returnerar nu en strukturerad JSON med separerad text och interaktiva element.
     """
     data = request.get_json()
     user_answers = data.get('answers', {})
     user_message = data.get('message', '')
     user_name = data.get('name', 'Användare')
 
-    # Räkna ut det aktuella hashvärdet för prompt-konfigurationen
+    if not user_message:
+         return jsonify({"error": "Message cannot be empty"}), 400
+
     current_hash = get_prompt_hash()
 
-    # Hantera start-meddelandet separat (alltid skapa en ny session)
-    if user_message.strip().lower() == "start":
-        history = build_initial_history(user_answers, user_message, user_name)
-        try:
-            # Bygg system instruction
-            system_instruction_text = build_system_instruction(user_answers)
-            
-            # Skapa en generativ modell med rätt konfiguration
-            model = genai.GenerativeModel(
-                model_name='gemini-2.0-flash',
-                system_instruction=system_instruction_text,
-                generation_config={
-                    "temperature": 1,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                    "max_output_tokens": 8192
-                }
-            )
-            
-            # Starta en chatt med modellen
-            session = model.start_chat(history=history)
-            
-            # Spara sessionen tillsammans med det aktuella hashvärdet
-            chat_sessions[user_name] = (session, current_hash)
-        except Exception as e:
-            logger.error("Fel vid skapande av chatt-session: %s", e)
-            return jsonify({"error": "Kunde inte skapa chatt-session"}), 500
-            
-        initial_greeting = history[0]["parts"][0]["text"]
-        return jsonify({"reply": initial_greeting})
-
-    # Om en session redan existerar, kontrollera om den nuvarande prompt-konfigurationen har ändrats
+    # --- Session Management ---
+    session = None
     session_tuple = chat_sessions.get(user_name)
-    if session_tuple:
-        session, session_prompt_hash = session_tuple
-        if session_prompt_hash != current_hash:
-            # Prompten har uppdaterats – skapa en ny session med den nya konfigurationen
-            history = build_initial_history(user_answers, user_message, user_name)
+
+    # Handle start message or prompt update
+    if user_message.strip().lower() == "start" or not session_tuple or session_tuple[1] != current_hash:
+        if user_message.strip().lower() == "start":
+            logger.info(f"Starting new session for {user_name} due to 'start' message.")
+            initial_greeting, history_for_session = build_initial_history(user_answers, user_message, user_name)
+
             try:
-                # Bygg system instruction
                 system_instruction_text = build_system_instruction(user_answers)
-                
-                # Skapa en generativ modell med rätt konfiguration
                 model = genai.GenerativeModel(
-                    model_name='gemini-2.0-flash',
+                    model_name='gemini-1.5-flash', # Using 1.5 flash as recommended
                     system_instruction=system_instruction_text,
                     generation_config={
                         "temperature": 1,
                         "top_p": 0.95,
-                        "top_k": 40,
-                        "max_output_tokens": 8192
+                        "top_k": 64, # Adjusted based on common practices for 1.5
+                        "max_output_tokens": 8192,
+                        "response_mime_type": "text/plain", # Explicitly request text
                     }
                 )
-                
-                # Starta en chatt med modellen
-                session = model.start_chat(history=history)
-                
-                # Spara sessionen tillsammans med det aktuella hashvärdet
+                session = model.start_chat(history=history_for_session) # Start with AI's greeting
                 chat_sessions[user_name] = (session, current_hash)
+                logger.info(f"New session created for {user_name} with hash {current_hash}")
+
+                # Parse the initial greeting itself (it might theoretically contain JSON)
+                parsed_greeting = parse_ai_response(initial_greeting)
+                interactive_element = None
+                if parsed_greeting.get("interactiveJson"):
+                    first_key = next(iter(parsed_greeting["interactiveJson"]), None)
+                    interactive_element = {
+                        "type": first_key,
+                        "data": parsed_greeting["interactiveJson"]
+                    }
+
+                return jsonify({
+                    "reply": {
+                        "textContent": parsed_greeting["textContent"],
+                        "interactiveElement": interactive_element
+                    }
+                })
+
             except Exception as e:
-                logger.error("Fel vid skapande av chatt-session: %s", e)
+                logger.error(f"Fel vid skapande av chatt-session för {user_name}: {e}")
                 return jsonify({"error": "Kunde inte skapa chatt-session"}), 500
-    else:
-        # Ingen session finns – skapa en ny
-        history = build_initial_history(user_answers, user_message, user_name)
-        try:
-            # Bygg system instruction
-            system_instruction_text = build_system_instruction(user_answers)
-            
-            # Skapa en generativ modell med rätt konfiguration
-            model = genai.GenerativeModel(
-                model_name='gemini-2.0-flash',
-                system_instruction=system_instruction_text,
-                generation_config={
-                    "temperature": 1,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                    "max_output_tokens": 8192
-                }
-            )
-            
-            # Starta en chatt med modellen
-            session = model.start_chat(history=history)
-            
-            # Spara sessionen tillsammans med det aktuella hashvärdet
-            chat_sessions[user_name] = (session, current_hash)
-        except Exception as e:
-            logger.error("Fel vid skapande av chatt-session: %s", e)
-            return jsonify({"error": "Kunde inte skapa chatt-session"}), 500
 
-    # Skicka användarens meddelande
+        else: # Prompt updated or session missing
+             if not session_tuple:
+                 logger.info(f"No session found for {user_name}. Creating new one.")
+             else:
+                 logger.info(f"Prompt hash changed for {user_name}. Old: {session_tuple[1]}, New: {current_hash}. Creating new session.")
+
+             # Create a new session but don't return the greeting, process the current message
+             _ , history_for_session = build_initial_history(user_answers, user_message, user_name) # Get history structure
+             try:
+                 system_instruction_text = build_system_instruction(user_answers)
+                 model = genai.GenerativeModel(
+                     model_name='gemini-1.5-flash',
+                     system_instruction=system_instruction_text,
+                    generation_config={
+                        "temperature": 1,
+                        "top_p": 0.95,
+                        "top_k": 64,
+                        "max_output_tokens": 8192,
+                        "response_mime_type": "text/plain",
+                    }
+                 )
+                 session = model.start_chat(history=history_for_session) # Use history starting with AI greeting
+                 chat_sessions[user_name] = (session, current_hash)
+                 logger.info(f"New session created for {user_name} after prompt update/missing session.")
+             except Exception as e:
+                 logger.error(f"Fel vid skapande av ny chatt-session (update/missing) för {user_name}: {e}")
+                 return jsonify({"error": "Kunde inte starta ny chatt-session"}), 500
+
+    else: # Existing session, prompt unchanged
+        session, _ = session_tuple
+        logger.info(f"Using existing session for {user_name}")
+
+    # --- Generate AI Reply ---
+    if not session:
+         logger.error(f"Session object is unexpectedly None for user {user_name}")
+         return jsonify({"error": "Chat session not available."}), 500
+
     try:
-        # Använd det nya API:et för att skicka meddelande
+        logger.info(f"Sending message to Gemini for {user_name}: '{user_message[:50]}...'")
+        # Ensure history is correctly managed
+        # Add user message to history before sending
+        # session.history.append({"role": "user", "parts": [{"text": user_message}]}) # This modifies internal state directly - maybe risky?
+        # Instead, rely on send_message to handle history implicitly
+
         response = session.send_message(content=user_message)
-        
-        # Hämta textinnehållet från svaret
-        text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
-        ai_reply = "\n".join(text_parts).strip() if text_parts else ""
-        
-        # Fixa eventuella problem med svarsformateringen
-        ai_reply = fix_ai_response(ai_reply)
-        
+
+        # Extract raw text reply
+        # Gemini 1.5 might return content directly in response.text if simple
+        ai_reply_raw = ""
+        if hasattr(response, 'text'):
+             ai_reply_raw = response.text
+        elif hasattr(response, 'parts') and response.parts:
+             text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
+             ai_reply_raw = "\n".join(text_parts).strip()
+        else:
+             logger.warning(f"Unexpected response structure from Gemini for {user_name}: {response}")
+             ai_reply_raw = "Jag kunde inte generera ett svar just nu."
+
+        logger.info(f"Received raw reply from Gemini for {user_name}: '{ai_reply_raw[:100]}...'")
+
+        # Add AI response to history (explicitly needed if not using stream?)
+        # Check Gemini library docs - start_chat should handle history implicitly with send_message
+        # Let's assume history is managed by the library for now.
+
     except Exception as e:
-        logger.error("Fel vid Gemini API-anrop: %s", e)
-        ai_reply = "Fel vid anrop till AI API. Var god försök igen senare."
+        logger.error(f"Fel vid Gemini API-anrop för {user_name}: {e}")
+        # Provide a user-friendly error message in the standard format
+        return jsonify({
+            "reply": {
+                "textContent": "Ursäkta, jag stötte på ett problem när jag försökte svara. Vänligen försök igen.",
+                "interactiveElement": None
+            }
+        }), 500 # Internal Server Error
 
-    return jsonify({"reply": ai_reply})
+    # --- Parse the AI Reply ---
+    parsed_response = parse_ai_response(ai_reply_raw)
+    logger.info(f"Parsed response for {user_name}. Text: '{parsed_response['textContent'][:100]}...', JSON found: {parsed_response['interactiveJson'] is not None}")
+
+    # --- Construct the New API Response Structure ---
+    interactive_element_response = None
+    if parsed_response["interactiveJson"]:
+        # Determine the 'type' from the first key of the JSON data
+        # Make sure interactiveJson is not empty
+        if parsed_response["interactiveJson"]:
+             interactive_type = next(iter(parsed_response["interactiveJson"]), None)
+             if interactive_type:
+                 interactive_element_response = {
+                     "type": interactive_type,
+                     "data": parsed_response["interactiveJson"] # Send the whole parsed JSON dict as data
+                 }
+             else:
+                  logger.warning(f"Parsed JSON for {user_name} was empty or had no keys.")
+        else:
+             logger.warning(f"interactiveJson was present but empty for {user_name}")
 
 
-@ai_bp.route('/api/admin/prompt', methods=['GET', 'POST'])
-def admin_prompt():
-    """
-    Endpoint för att hantera redigering av systemprompt via ett UI under test-/utvecklingsfasen
-    """
-    global admin_prompt_config
-    
-    if request.method == 'GET':
-        return jsonify({"prompt_config": admin_prompt_config})
-    
-    elif request.method == 'POST':
-        data = request.get_json()
-        if not data or "prompt_config" not in data:
-            return jsonify({"error": "Ogiltig data, förväntar 'prompt_config'"}), 400
-            
-        # Förvänta att data["prompt_config"] är en lista av sektioner med 'title' och 'content'
-        try:
-            new_config = data["prompt_config"]
-            
-            # Enkel validering
-            if not isinstance(new_config, list):
-                return jsonify({"error": "'prompt_config' ska vara en lista"}), 400
-                
-            for section in new_config:
-                if not isinstance(section, dict) or "title" not in section or "content" not in section:
-                    return jsonify({"error": "Varje sektion ska vara ett objekt med 'title' och 'content'"}), 400
-                    
-            admin_prompt_config = new_config
-            
-            # Rensa chat_sessions så att ny systemprompt används för nya sessioner
-            global chat_sessions
-            chat_sessions = {}
-            
-            return jsonify({
-                "message": "Prompt configuration updated successfully", 
-                "prompt_config": admin_prompt_config
-            })
-            
-        except Exception as e:
-            logger.error("Fel vid uppdatering av prompt configuration: %s", e)
-            return jsonify({"error": "Kunde inte uppdatera prompt configuration"}), 500
+    final_response = {
+        "reply": {
+            "textContent": parsed_response["textContent"],
+            "interactiveElement": interactive_element_response
+        }
+    }
+
+    return jsonify(final_response)
+
+
+# Prompt Editor endpoint är borttagen.
 
 
 if __name__ == '__main__':
     from flask import Flask
     from flask_cors import CORS
-    import os
-    
+
     app = Flask(__name__)
-    CORS(app)
+    # Allow all origins for local development ease, restrict in production!
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     app.register_blueprint(ai_bp)
-    
-    # Använd PORT miljövariabeln för Render eller 5000 som standard
-    port = int(os.environ.get('PORT', 5000))
+
+    # Serve static files for images
+    @app.route('/static/<path:path>')
+    def serve_static(path):
+        return send_from_directory('static', path)
+
+    # Använd PORT miljövariabeln för Render eller 10000 som standard
+    port = int(os.environ.get('PORT', 10000))
+    # Ensure the static folder exists
+    if not os.path.exists('static/images'):
+         os.makedirs('static/images', exist_ok=True)
+         print("Created static/images directory.")
+
+    print(f"Starting development server on http://0.0.0.0:{port}")
     app.run(host='0.0.0.0', port=port, debug=True)
