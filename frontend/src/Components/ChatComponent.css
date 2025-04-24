@@ -1,1303 +1,417 @@
 /* frontend/src/Components/ChatComponent.css */
 
+/* --- Grundläggande Layout & Behållare --- */
 .chat-container {
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 20px;
-    font-family: 'Roboto', sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: linear-gradient(135deg, #f5f7fa 0%, #e8ebf2 100%);
-    border-radius: 16px;
-    box-sizing: border-box;
-    overflow: hidden;
-    position: relative;
-    transition: all 0.3s ease;
-  }
-  
-  /* Header styling */
-  .chat-header {
-    text-align: center;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    flex-shrink: 0;
-    background-color: rgba(255, 255, 255, 0.8);
-    border-radius: 12px;
-    padding: 12px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
-  }
-  
-  .chat-header h1 {
-    font-size: 1.8em;
-    color: #2c3e50;
-    margin: 0;
-  }
-  
-  .chat-header-description {
-    margin-top: 8px;
-    font-size: 1em;
-    color: #5a6270;
-  }
-  
-  /* Messages container */
-  .chat-messages {
-    flex: 1 1 auto;
-    overflow-y: auto;
-    margin-bottom: 16px;
-    padding: 15px;
-    border-radius: 12px;
-    background-color: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-    backdrop-filter: blur(5px);
-    scrollbar-width: thin;
-    scrollbar-color: #c1c9d2 transparent;
-    display: flex;
-    flex-direction: column;
-    min-height: 0; /* This is crucial for flex child with overflow */
-    transition: all 0.3s ease;
-    scroll-behavior: smooth;
-  }
-  
-  /* Improved scrollbar styling */
-  .chat-messages::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .chat-messages::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 10px;
-  }
-  
-  .chat-messages::-webkit-scrollbar-thumb {
-    background-color: rgba(193, 201, 210, 0.6);
-    border-radius: 10px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .chat-messages::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(193, 201, 210, 0.9);
-  }
-  
-  /* Message styling with smooth transitions */
-  .chat-message {
-    margin-bottom: 15px;
-    width: auto;
-    max-width: 85%;
-    padding: 14px 16px;
-    border-radius: 18px;
-    line-height: 1.5;
-    font-size: 1em;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    position: relative;
-    word-wrap: break-word;
-    white-space: pre-wrap;
-    transform-origin: center bottom;
-    animation: messageAppear 0.35s ease-out;
-    transition: all 0.2s ease-out;
-  }
-  
-  /* Enhanced animation for message appearance */
-  @keyframes messageAppear {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  /* New animations for flowing content */
-  .animate-in {
-    animation: fadeInUp 0.5s ease-out;
-  }
-  
-  .animate-in-slow {
-    animation: fadeInUp 0.6s ease-out 0.2s both;
-  }
-  
-  .animate-in-paragraph {
-    animation: fadeInParagraph 0.5s ease-out both;
-    margin-bottom: 0.7em;
-  }
-  
-  .animate-in-paragraph:last-child {
-    margin-bottom: 0;
-  }
-  
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @keyframes fadeInParagraph {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  /* Glass effect for AI messages */
-  .chat-message.assistant {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-top-left-radius: 6px;
-    color: #2c3e50;
-    align-self: flex-start;
-    margin-left: 5px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  
-  .chat-message.user {
-    background: linear-gradient(135deg, #4e73df, #3a5dd0);
-    color: white;
-    align-self: flex-end;
-    margin-right: 5px;
-    border-top-right-radius: 6px;
-    box-shadow: 0 2px 8px rgba(78, 115, 223, 0.15);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  
-  /* Text animation and styling */
-  .smooth-text {
-    width: 100%;
-  }
-  
-  /* Improved markdown styling with better spacing and formatting */
-  .markdown-content {
-    line-height: 1.6;
-  }
-  
-  .markdown-content p {
-    margin: 0 0 1em 0;
-  }
-  
-  .markdown-content p:last-child {
-    margin-bottom: 0;
-  }
-  
-  .markdown-content strong {
-    font-weight: 600;
-    color: #2c3e50;
-  }
-  
-  .markdown-content em {
-    font-style: italic;
-    color: #34495e;
-  }
-  
-  .markdown-content h1, 
-  .markdown-content h2, 
-  .markdown-content h3, 
-  .markdown-content h4 {
-    margin: 1.2em 0 0.7em 0;
-    line-height: 1.3;
-    color: #2c3e50;
-    font-weight: 600;
-  }
-  
-  .markdown-content h1 {
-    font-size: 1.6em;
-  }
-  
-  .markdown-content h2 {
-    font-size: 1.4em;
-  }
-  
-  .markdown-content h3 {
-    font-size: 1.2em;
-  }
-  
-  .markdown-content h4 {
-    font-size: 1.1em;
-  }
-  
-  /* Improved list styling */
-  .markdown-content ul, 
-  .markdown-content ol {
-    margin: 0 0 1em 0;
-    padding-left: 1.5em;
-  }
-  
-  .markdown-content ul {
-    list-style-type: disc;
-  }
-  
-  .markdown-content ol {
-    list-style-type: decimal;
-  }
-  
-  .markdown-content li {
-    margin-bottom: 0.5em;
-    padding-left: 0.3em;
-  }
-  
-  .markdown-content li:last-child {
-    margin-bottom: 0;
-  }
-  
-  /* Ensure space between list items */
-  .markdown-content li + li {
-    margin-top: 0.4em;
-  }
-  
-  /* Fix nested lists */
-  .markdown-content li > ul,
-  .markdown-content li > ol {
-    margin-top: 0.4em;
-    margin-bottom: 0;
-  }
-  
-  .markdown-content a {
-    color: #4e73df;
-    text-decoration: underline;
-    transition: color 0.2s ease;
-  }
-  
-  .markdown-content a:hover {
-    color: #3a5dd0;
-  }
-  
-  .markdown-content blockquote {
-    margin: 0.7em 0;
-    padding: 0.7em 1em;
-    border-left: 3px solid #e2e8f0;
-    background-color: rgba(237, 242, 247, 0.7);
-    color: #4a5568;
-    border-radius: 4px;
-  }
-  
-  /* Enhanced blinking cursor styling */
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
-  
-  .typing-cursor {
-    display: inline-block;
-    width: 8px;
-    height: 16px;
-    background-color: #4e73df;
-    vertical-align: middle;
-    margin-left: 2px;
-    animation: blink 0.8s infinite;
-    border-radius: 1px;
-  }
-  
-  /* Interactive content animation - guaranteed smooth transitions */
-  .interactive-content {
-    margin-top: 10px;
-    width: 100%;
-    opacity: 1;
-    transition: opacity 0.6s ease;
-    will-change: opacity, transform;
-  }
-  
-  /* Interactive items styling with guaranteed animations */
-  .interactive-item {
-    margin-top: 15px;
-    transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); /* Smoother easing curve */
-    will-change: opacity, transform;
-    transform-origin: top center;
-  }
-  
-  .interactive-item.animate-in {
-    animation: rollInItem 0.7s cubic-bezier(0.19, 1.0, 0.22, 1.0) forwards;
-  }
-  
-  @keyframes rollInItem {
-    0% { 
-      opacity: 0; 
-      transform: translateY(25px) scale(0.95); 
-    }
-    60% {
-      opacity: 1;
-    }
-    100% { 
-      opacity: 1; 
-      transform: translateY(0) scale(1); 
-    }
-  }
-  
-  /* Apply staggered delays to multiple items */
-  .interactive-item:nth-child(2) {
-    animation-delay: 0.1s;
-  }
-  .interactive-item:nth-child(3) {
-    animation-delay: 0.2s;
-  }
-  .interactive-item:nth-child(4) {
-    animation-delay: 0.3s;
-  }
-  
-  /* Improved AI Thinking indicator */
-  .ai-thinking {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 15px;
-    background-color: rgba(255, 255, 255, 0.85);
-    border-radius: 20px;
-    border-top-left-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    margin: 0 0 15px 5px;
-    align-self: flex-start;
-    width: auto;
-    min-width: 65px;
-  }
-  
-  .ai-thinking-dots {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .ai-thinking-dots span {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin: 0 4px;
-    background-color: #4e73df;
-    border-radius: 50%;
-    opacity: 0.7;
-  }
-  
-  .ai-thinking-dots span:nth-child(1) {
-    animation: dot-bounce 1.2s -0.32s infinite ease-in-out;
-  }
-  
-  .ai-thinking-dots span:nth-child(2) {
-    animation: dot-bounce 1.2s -0.16s infinite ease-in-out;
-  }
-  
-  .ai-thinking-dots span:nth-child(3) {
-    animation: dot-bounce 1.2s 0s infinite ease-in-out;
-  }
-  
-  @keyframes dot-bounce {
-    0%, 80%, 100% { transform: scale(0.6); }
-    40% { transform: scale(1.0); opacity: 1; }
-  }
-  
-  /* Binary question styling */
-  .binary-question-container {
-    margin-top: 16px;
-    width: 100%;
-    text-align: center;
-    padding: 16px;
-    background-color: rgba(248, 249, 250, 0.7);
-    border-radius: 10px;
-    border-left: 4px solid #4e73df;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-    transition: all 0.3s ease;
-    position: relative;
-  }
-  
-  .binary-question-text {
-    margin-bottom: 14px !important;
-    font-weight: 500;
-  }
-  
-  .binary-options {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-  }
-  
-  .binary-option-btn {
-    min-width: 100px !important;
-    padding: 8px 16px !important;
-    font-weight: 500 !important;
-    border-radius: 25px !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08) !important;
-  }
-  
-  .binary-option-btn:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-  }
-  
-  /* Quick Response Buttons Styling */
-  .quick-responses-area {
-    display: flex;
-    justify-content: center;
-    padding: 12px 0;
-    margin-bottom: 8px;
-    transition: all 0.3s ease;
-  }
-  
-  .quick-response-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
-  }
-  
-  .quick-response-chip {
-    font-size: 0.9rem !important;
-    border-radius: 20px !important;
-    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-    padding: 4px 2px 4px 10px !important;
-    height: 38px !important;
-    border: 1px solid rgba(78, 115, 223, 0.5) !important;
-    background-color: rgba(255, 255, 255, 0.8) !important;
-    cursor: pointer !important;
-    will-change: transform, box-shadow, background-color !important;
-    transform: scale(1) translateZ(0) !important;
-  }
-  
-  .quick-response-chip:hover {
-    transform: translateY(-3px) scale(1.03) !important;
-    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15) !important;
-    background-color: rgba(255, 255, 255, 0.95) !important;
-    border-color: #4e73df !important;
-    z-index: 1 !important;
-  }
-  
-  .quick-response-chip:active, .quick-response-active {
-    transform: translateY(0) scale(0.98) !important;
-    background-color: rgba(78, 115, 223, 0.1) !important;
-    border-color: #3a5dd0 !important;
-    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1) !important;
-  }
-  
-  /* Ensure chip text is visible */
-  .quick-response-chip span {
-    color: #2c3e50 !important;
-    font-weight: 500 !important;
-    white-space: nowrap !important;
-  }
-  
-  .quick-response-icon {
-    margin-right: 5px;
-    font-size: 1rem;
-  }
-  
-  /* Input area styling */
-  .input-area {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-    flex-shrink: 0;
-    margin-top: auto;
-    transition: all 0.3s ease;
-  }
-  
-  .input-area .MuiTextField-root {
-    background-color: #f8f9fa;
-    border-radius: 12px;
-    transition: all 0.3s ease;
-  }
-  
-  .input-area .MuiTextField-root:focus-within {
-    background-color: #fff;
-    box-shadow: 0 0 0 2px rgba(78, 115, 223, 0.1);
-  }
-  
-  .input-area .MuiOutlinedInput-root {
-    border-radius: 12px;
-    transition: all 0.3s ease;
-  }
-  
-  .input-area .MuiButton-root {
-    border-radius: 12px;
-    background-color: #4e73df;
-    text-transform: none;
-    font-weight: 600;
-    padding: 10px 20px;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 6px rgba(78, 115, 223, 0.2);
-    white-space: nowrap;
-  }
-  
-  .input-area .MuiButton-root:hover {
-    background-color: #3a5dd0;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 8px rgba(78, 115, 223, 0.25);
-  }
-  
-  .input-area .MuiButton-root:active {
-    transform: translateY(0);
-  }
-  
-  /* Exercise and suggestions styling */
-  .exercise-container {
-    margin-top: 16px;
-    padding: 16px;
-    border-radius: 10px;
-    background-color: rgba(248, 249, 250, 0.7);
-    border-left: 4px solid #4e73df;
-    width: 100%;
-    box-sizing: border-box;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-    transition: all 0.3s ease;
-    position: relative;
-  }
-  
-  .exercise-instruction {
-    font-weight: 600;
-    margin: 0 0 10px 0;
-    font-size: 1.05em;
-    color: #2c3e50;
-  }
-  
-  .exercise-description {
-    font-style: italic;
-    margin: 0 0 14px 0;
-    color: #5a6270;
-    line-height: 1.5;
-  }
-  
-  .exercise-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 12px;
-  }
-  
-  .exercise-options .MuiButton-root {
-    border-radius: 8px;
-    text-transform: none;
-    font-weight: 500;
-    background-color: white;
-    color: #4e73df;
-    border: 1px solid #4e73df;
-    transition: all 0.2s ease;
-    margin-bottom: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
-  }
-  
-  .exercise-options .MuiButton-root:hover {
-    background-color: #4e73df;
-    color: white;
-    box-shadow: 0 4px 8px rgba(78, 115, 223, 0.2);
-    transform: translateY(-2px);
-  }
-  
-  .suggestions-container {
-    margin-top: 15px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    width: 100%;
-  }
-  
-  .suggestion-button {
-    text-transform: none !important;
-    border-radius: 25px !important;
-    padding: 8px 16px !important;
-    font-size: 0.9em !important;
-    font-weight: 500 !important;
-    transition: all 0.2s ease !important;
-    background-color: #4e73df !important;
-    color: white !important;
-    box-shadow: 0 4px 6px rgba(78, 115, 223, 0.15) !important;
-    margin-bottom: 6px !important;
-  }
-  
-  .suggestion-button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 10px rgba(78, 115, 223, 0.25) !important;
-  }
-  
-  /* Media elements */
-  .media-container {
-    margin-top: 15px;
-    width: 100%;
-  }
-  
-  .chat-image {
-    max-width: 100%;
-    height: auto;
-    border-radius: 10px;
-    margin-top: 8px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-    transition: transform 0.3s ease;
-  }
-  
-  .chat-image:hover {
-    transform: scale(1.01);
-  }
-  
-  /* TTS Widget styling */
-  .tts-widget {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #4e73df, #36b9cc);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 1000;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-  }
-  
-  .tts-widget-icon {
-    font-size: 1.4rem;
-    color: white;
-    transition: all 0.3s ease;
-  }
-  
-  .tts-widget:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-  }
-  
-  .tts-widget.active {
-    background: linear-gradient(135deg, #36b9cc, #1cc88a);
-  }
-  
-  .tts-widget.active .tts-widget-icon {
-    animation: pulse 1.5s infinite;
-  }
-  
-  .tts-widget.muted {
-    background: linear-gradient(135deg, #858796, #6e707e);
-    opacity: 0.8;
-  }
-  
-  @keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.2); opacity: 0.8; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-  
-  /* Wave animation for active TTS */
-  .wave {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    animation: wave 2s infinite;
-    background: transparent;
-    border: 2px solid rgba(255, 255, 255, 0.5);
-    opacity: 0;
-  }
-  
-  .wave:nth-child(2) {
-    animation-delay: 0.5s;
-  }
-  
-  .wave:nth-child(3) {
-    animation-delay: 1s;
-  }
-  
-  @keyframes wave {
-    0% {
-      transform: scale(0.8);
-      opacity: 0.8;
-    }
-    100% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
-  }
-  
-  /* ===== Component Styles with improved spacing ===== */
-  
-  /* Scenario Card */
-  .scenario-card {
-    width: 100%;
-    margin: 10px 0;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.06);
-    background-color: #ffffff;
-    border-left: 4px solid #ff9800;
-    transition: all 0.3s ease;
-    position: relative;
-  }
-  
-  .scenario-card:hover {
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-  }
-  
-  .scenario-header {
-    background: linear-gradient(to right, #ff9800, #ffb74d);
-    color: white;
-    padding: 12px 16px !important;
-  }
-  
-  .scenario-description {
-    padding: 10px 0;
-    color: #455a64;
-    line-height: 1.6;
-    font-size: 1.05em;
-  }
-  
-  .scenario-options {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 15px;
-  }
-  
-  .scenario-option-btn {
-    text-align: left;
-    justify-content: flex-start;
-    padding: 12px 16px !important;
-    font-weight: normal !important;
-    color: #455a64 !important;
-    border-color: #e0e0e0 !important;
-    background-color: #f5f5f5 !important;
-    transition: all 0.2s ease !important;
-  }
-  
-  .scenario-option-btn:hover {
-    background-color: #e9f0fe !important;
-    border-color: #4e73df !important;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08) !important;
-  }
-  
-  /* Multiple choice styling */
-  .question-container {
-    width: 100%;
-    margin: 10px 0;
-    padding: 16px;
-    border-radius: 12px;
-    background-color: #f9f9fc;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border-left: 4px solid #4e73df;
-    transition: all 0.3s ease;
-    position: relative;
-  }
-  
-  .question-container:hover {
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
-  }
-  
-  .multiple-choice {
-    border-left-color: #4e73df;
-  }
-  
-  .matching-question {
-    border-left-color: #36b9cc;
-  }
-  
-  .ordering-question {
-    border-left-color: #1cc88a;
-  }
-  
-  .question-title {
-    color: #2c3e50;
-    margin-bottom: 14px !important;
-    font-weight: 600;
-    font-size: 1.05em !important;
-  }
-  
-  .question-submit-btn {
-    margin-top: 15px !important;
-    transition: all 0.2s ease !important;
-  }
-  
-  .question-submit-btn:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 8px rgba(78, 115, 223, 0.2) !important;
-  }
-  
-  /* Matching question styling */
-  .matching-grid {
-    margin: 12px 0;
-  }
-  
-  .matching-item {
-    padding: 12px;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    transition: all 0.2s ease;
-    border-radius: 8px;
-  }
-  
-  .matching-item:hover {
-    background-color: rgba(78, 115, 223, 0.03);
-  }
-  
-  .item-text {
-    flex: 1;
-    font-weight: 500;
-  }
-  
-  .matching-select {
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #ddd;
-    background-color: white;
-    width: 100%;
-    font-family: inherit;
-    font-size: 0.95em;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-  }
-  
-  .matching-select:focus {
-    border-color: #4e73df;
-    box-shadow: 0 1px 3px rgba(78, 115, 223, 0.2);
-    outline: none;
-  }
-  
-  /* Ordering question styling */
-  .ordering-list {
-    margin: 12px 0;
-  }
-  
-  .ordering-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    margin-bottom: 10px;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
-    transition: all 0.2s ease;
-  }
-  
-  .ordering-item:hover {
-    background-color: #f9f9fc;
-    transform: translateY(-1px);
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
-  }
-  
-  .ordering-controls {
-    display: flex;
-    gap: 6px;
-  }
-  
-  /* Role Play Dialog */
-  .roleplay-container {
-    width: 100%;
-    margin: 10px 0;
-    padding: 0;
-    border-radius: 12px;
-    background-color: #ffffff;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    transition: all 0.3s ease;
-    position: relative;
-  }
-  
-  .roleplay-container:hover {
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-  }
-  
-  .roleplay-header {
-    background-color: #4e73df;
-    color: white;
-    padding: 16px;
-  }
-  
-  .roleplay-scenario {
-    margin-top: 8px;
-    color: rgba(255, 255, 255, 0.95);
-    line-height: 1.5;
-  }
-  
-  .dialogue-container {
-    padding: 16px;
-  }
-  
-  .dialogue-entry {
-    display: flex;
-    margin-bottom: 16px;
-    align-items: flex-start;
-    transition: transform 0.2s ease;
-  }
-  
-  .dialogue-entry:hover {
-    transform: translateX(2px);
-  }
-  
-  .dialogue-user {
-    background-color: rgba(78, 115, 223, 0.05);
-    padding: 10px;
-    border-radius: 8px;
-  }
-  
-  .dialogue-avatar {
-    margin-right: 12px;
-    flex-shrink: 0;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease;
-  }
-  
-  .dialogue-avatar:hover {
-    transform: scale(1.05);
-  }
-  
-  .dialogue-content {
-    flex: 1;
-  }
-  
-  .dialogue-role {
-    font-weight: 600;
-    margin-bottom: 5px;
-    color: #2c3e50;
-  }
-  
-  .dialogue-message {
-    color: #455a64;
-    line-height: 1.6;
-  }
-  
-  .learning-points {
-    background-color: #e9f0fe;
-    padding: 16px;
-    border-top: 1px solid #dee2e6;
-  }
-  
-  .learning-points-header {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 10px;
-  }
-  
-  .learning-points-list {
-    margin: 0;
-    padding-left: 20px;
-  }
-  
-  .learning-points-list li {
-    margin-bottom: 5px;
-    line-height: 1.5;
-  }
-  
-  /* Feedback component */
-  .feedback-alert {
-    width: 100%;
-    margin: 12px 0 !important;
-    border-radius: 8px !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
-    transition: all 0.3s ease !important;
-    position: relative;
-  }
-  
-  .feedback-alert:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-  }
-  
-  .feedback-content {
-    width: 100%;
-  }
-  
-  .feedback-title {
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  
-  .feedback-message {
-    margin-bottom: 8px;
-    line-height: 1.5;
-  }
-  
-  .feedback-points {
-    margin: 12px 0;
-    padding-left: 20px;
-  }
-  
-  .feedback-points li {
-    margin-bottom: 5px;
-    line-height: 1.5;
-  }
-  
-  .feedback-action {
-    padding-top: 8px;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-  }
+  max-width: 800px; /* Något smalare för bättre läsbarhet */
+  width: 100%;
+  margin: 15px auto; /* Lite marginal uppe/nere */
+  padding: 15px;
+  font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; /* Standard typsnitt */
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--vh, 1vh) * 100 - 30px); /* Anpassar för mobil + marginal */
+  max-height: 95vh; /* Förhindrar att den blir FÖR hög på stora skärmar */
+  background-color: #f4f7f9; /* Ljusare, renare bakgrund */
+  border-radius: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.07); /* Mjuk skugga */
+}
 
-  /* ===== STYLES FOR INACTIVE INTERACTIVE ELEMENTS ===== */
-  
-  /* Base style for inactive interactive items */
-  .inactive-interactive-item {
-    pointer-events: none !important;
-    cursor: default !important;
-    position: relative;
+.chat-header {
+  text-align: center;
+  padding: 10px 15px;
+  border-bottom: 1px solid #e8e8e8;
+  flex-shrink: 0;
+  background-color: #ffffff;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.chat-header h1 {
+  font-size: 1.4em; /* Något mindre */
+  color: #333;
+  margin: 0;
+  font-weight: 500;
+}
+
+.chat-header-description {
+  margin-top: 4px;
+  font-size: 0.9em;
+  color: #667;
+}
+
+.chat-messages {
+  flex: 1 1 auto; /* Tar upp tillgängligt utrymme */
+  overflow-y: auto; /* Endast vertikal scroll */
+  padding: 15px 10px; /* Lite padding */
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* Mellanrum mellan meddelanden */
+  scrollbar-width: thin;
+  scrollbar-color: #c5ced6 transparent;
+}
+
+/* Webkit Scrollbar */
+.chat-messages::-webkit-scrollbar { width: 5px; }
+.chat-messages::-webkit-scrollbar-track { background: transparent; }
+.chat-messages::-webkit-scrollbar-thumb { background-color: #c5ced6; border-radius: 10px; }
+.chat-messages::-webkit-scrollbar-thumb:hover { background-color: #aeb9c5; }
+
+/* --- Meddelandestilar --- */
+.chat-message {
+  max-width: 80%; /* Maxbredd för bubblor */
+  padding: 10px 15px;
+  border-radius: 18px; /* Mjuka hörn */
+  line-height: 1.55; /* Bra läsbarhet */
+  font-size: 0.95em; /* Något mindre standardtext */
+  word-wrap: break-word; /* Bryt långa ord */
+  white-space: pre-wrap; /* Behåll radbrytningar */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  animation: messageAppear 0.3s ease-out;
+}
+
+@keyframes messageAppear {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-message.assistant {
+  background-color: #ffffff; /* Ren vit */
+  color: #333;
+  align-self: flex-start;
+  border-top-left-radius: 4px; /* Platt hörn mot kanten */
+  margin-right: auto; /* För att säkerställa vänsterjustering om max-width inte nås */
+}
+
+.chat-message.user {
+  background-color: #4e73df; /* Behåll primärfärg */
+  color: white;
+  align-self: flex-end;
+  border-top-right-radius: 4px; /* Platt hörn mot kanten */
+  margin-left: auto; /* Säkerställ högerjustering */
+}
+
+/* --- Textanimation & Markdown --- */
+.smooth-text { width: 100%; }
+
+.markdown-content { line-height: 1.55; }
+.markdown-content p { margin: 0 0 0.8em 0; }
+.markdown-content p:last-child { margin-bottom: 0; }
+.markdown-content strong { font-weight: 600; }
+.markdown-content em { font-style: italic; }
+.markdown-content ul, .markdown-content ol { margin: 0.5em 0 0.8em 0; padding-left: 1.8em; }
+.markdown-content li { margin-bottom: 0.4em; }
+.markdown-content li > ul, .markdown-content li > ol { margin-top: 0.4em; margin-bottom: 0; }
+.markdown-content a { color: #4e73df; text-decoration: none; }
+.markdown-content a:hover { text-decoration: underline; }
+.markdown-content blockquote {
+    margin: 0.8em 0;
+    padding: 0.6em 1em;
+    border-left: 3px solid #d1d9e6;
+    background-color: #f8f9fa;
+    color: #555;
+    border-radius: 4px;
+}
+.markdown-content img.chat-image { /* Styling för bilder inuti markdown */
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin-top: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.typing-cursor {
+  display: inline-block;
+  width: 2px; /* Tunnare cursor */
+  height: 1.1em; /* Matchar texthöjd */
+  background-color: #555;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: blink 1s infinite;
+}
+
+/* --- Interaktiva Element Wrapper --- */
+.interactive-content-wrapper {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease-out 0.1s, transform 0.4s ease-out 0.1s; /* Liten delay på transition */
+  margin-top: 12px; /* Mellanrum mellan text och interaktiv del */
+  padding-top: 10px; /* Lite extra luft */
+  border-top: 1px solid rgba(0, 0, 0, 0.05); /* Subtil avdelare */
+}
+
+.interactive-content-wrapper.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Gömmer initialt, syns när 'visible' läggs till */
+.interactive-content-wrapper.hidden {
+  opacity: 0;
+}
+
+/* Styling för inaktiva/gamla interaktiva element */
+.interactive-content-wrapper.disabled-interactive {
+  pointer-events: none;
+  /* Lägg till visuell nedtoning om önskat */
+  /* filter: grayscale(60%); */
+  /* opacity: 0.7; */
+}
+/* Ta bort border-top när den är disabled om det ser bättre ut */
+.interactive-content-wrapper.disabled-interactive {
+   border-top: none;
+   padding-top: 0;
+   margin-top: 5px; /* Mindre marginal när den är inaktiv */
+}
+
+
+/* --- Generella Question Containers (används av flera typer) --- */
+.question-container {
+  /* Ingen egen bakgrund eller border - tar stilen från meddelandebubblan */
+  padding: 5px 0 0 0; /* Liten padding uppåt */
+  width: 100%;
+}
+.question-title {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 10px !important;
+  font-size: 1em !important; /* Behåll storleken relativt bubblans text */
+}
+.question-submit-btn {
+  margin-top: 12px !important;
+  border-radius: 20px !important; /* Mjuka knappar */
+  padding: 5px 15px !important;
+  font-size: 0.85em !important;
+}
+.question-container .MuiFormControlLabel-label {
+    font-size: 0.95em; /* Justera label-storlek */
+}
+
+/* --- Specifika Komponentstilar (förenklade) --- */
+
+/* Multiple Choice / Radio */
+.multiple-choice .MuiFormGroup-root { padding-left: 5px; }
+
+/* Matching */
+.matching-item { /* Ingen paper/div-bakgrund, bara layout */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 5px 0;
+}
+.item-text { flex: 1; font-size: 0.95em; }
+.matching-select {
+    padding: 8px 10px; /* Lite mindre padding */
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    font-size: 0.9em;
+    min-width: 150px; /* Ge lite bredd */
+}
+
+/* Ordering */
+.ordering-list { margin: 10px 0; }
+.ordering-item { /* Ingen paper/div-bakgrund */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 5px; /* Mindre padding */
+  margin-bottom: 6px;
+  background-color: rgba(78, 115, 223, 0.03); /* Väldigt lätt bakgrund */
+  border-radius: 6px;
+}
+.ordering-item Typography { font-size: 0.95em; }
+.ordering-controls button {
+    min-width: 30px !important; /* Mindre knappar */
+    padding: 2px !important;
+}
+
+/* Scenario */
+.scenario-container { padding: 5px 0 0 0; }
+.scenario-title { font-weight: 600; color: #333; margin-bottom: 8px; font-size: 1.05em; }
+.scenario-description { margin: 5px 0 12px 0; font-size: 0.95em; }
+.scenario-options { display: flex; flex-direction: column; gap: 8px; }
+.scenario-option-btn {
+    text-transform: none !important;
+    font-weight: 400 !important;
+    justify-content: center !important; /* Centrera texten i knappen */
+    padding: 8px 12px !important;
+    font-size: 0.9em !important;
+    border-radius: 8px !important;
+    background-color: #eef2f7 !important; /* Ljus bakgrund */
+    border: 1px solid #d1d9e6 !important;
+    color: #4e73df !important;
+}
+.scenario-option-btn:hover {
+    background-color: #e1e9f5 !important;
+    border-color: #a8b9d1 !important;
+}
+
+/* Roleplay */
+.roleplay-container { padding: 5px 0 0 0; }
+.roleplay-header { padding-bottom: 10px; }
+.roleplay-header h6 { font-weight: 600; color: #333; font-size: 1.05em; }
+.roleplay-header body2 { font-size: 0.9em; color: #667; }
+.dialogue-container { margin-top: 10px; }
+.dialogue-entry { display: flex; margin-bottom: 10px; align-items: flex-start; gap: 8px; }
+.dialogue-avatar { flex-shrink: 0; }
+.dialogue-message { font-size: 0.95em; }
+.dialogue-role { font-size: 0.8em; font-weight: 500; margin-bottom: 2px; }
+.learning-points { margin-top: 15px; padding-top: 10px; border-top: 1px dashed #d1d9e6; }
+.learning-points-header { font-size: 0.9em; font-weight: 600; color: #555; margin-bottom: 5px; }
+.learning-points-list { font-size: 0.9em; padding-left: 18px; margin: 0; }
+.learning-points-list li { margin-bottom: 3px; }
+
+/* Feedback */
+.feedback-container {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  margin: 5px 0 0 0; /* Flyttat till containern */
+  border: 1px solid; /* Border sätts via specifik klass */
+}
+.feedback-info { background-color: #e7f3fe; border-color: #b3d7ff; }
+.feedback-warning { background-color: #fff4e5; border-color: #ffe0b2; }
+.feedback-error { background-color: #ffebee; border-color: #ffcdd2; }
+.feedback-icon { font-size: 1.1rem; margin-top: 2px; }
+.feedback-content { flex-grow: 1; }
+.feedback-title { font-weight: 600; margin-bottom: 4px; font-size: 0.95em; }
+.feedback-message, .feedback-points li, .feedback-action { font-size: 0.9em; }
+.feedback-points { margin: 6px 0; padding-left: 18px; }
+.feedback-points li { margin-bottom: 3px; }
+.feedback-action { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.1); }
+
+/* Suggestions / Binary */
+.suggestions-container { padding: 5px 0 0 0; }
+.suggestions-text { font-size: 1em; margin-bottom: 10px !important; }
+.suggestions-options { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; /* Starta från vänster */ }
+.suggestion-button { /* Delad stil */
+    text-transform: none !important;
+    border-radius: 20px !important;
+    padding: 6px 14px !important;
+    font-size: 0.9em !important;
+}
+/* Behåll stilar för binary-options om du vill ha specifik layout för dem */
+.suggestions-options.binary-options { justify-content: center; }
+
+
+/* --- AI Thinking Indicator --- */
+.ai-thinking {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #e9ecef; /* Neutral grå */
+  border-radius: 15px;
+  border-top-left-radius: 4px;
+  margin: 0 0 0 0; /* Nollställ marginal, låt gap i .chat-messages sköta det */
+  align-self: flex-start;
+  width: auto;
+}
+.ai-thinking-dots span { background-color: #6c757d; /* Mörkare grå */ }
+/* Keyframes dot-bounce oförändrad */
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.6); }
+  40% { transform: scale(1.0); opacity: 1; }
+}
+
+/* --- Quick Responses --- */
+.quick-responses-area {
+  padding: 8px 10px; /* Lite mindre padding */
+  flex-shrink: 0; /* Förhindra att den krymper */
+  border-top: 1px solid #e8e8e8;
+  background-color: #f4f7f9; /* Matcha container-bakgrund */
+}
+.quick-response-container { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.quick-response-chip {
+  font-size: 0.85rem !important;
+  border-radius: 16px !important;
+  padding: 3px 8px !important; /* Justerad padding */
+  height: 32px !important; /* Något mindre */
+  border: 1px solid #c5ced6 !important;
+  background-color: #ffffff !important;
+  color: #4e73df !important;
+  transition: all 0.2s ease !important;
+}
+.quick-response-chip:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+  border-color: #a8b9d1 !important;
+  background-color: #f8fafd !important;
+}
+.quick-response-active {
+    background-color: #e2e8f1 !important;
+    transform: scale(0.98) !important;
+}
+.quick-response-icon { margin-right: 4px; font-size: 0.9rem; }
+
+
+/* --- Input Area --- */
+.input-area {
+  display: flex;
+  align-items: flex-end; /* Align to bottom for multiline */
+  gap: 8px;
+  padding: 10px 15px;
+  background-color: #e9edf0; /* Lätt grå bakgrund */
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  flex-shrink: 0;
+}
+
+.input-area .MuiTextField-root .MuiOutlinedInput-root {
+  border-radius: 20px !important; /* Matchar runda knappen */
+  background-color: #ffffff; /* Vit bakgrund för fältet */
+  padding: 8px 12px; /* Justera intern padding */
+}
+.input-area .MuiOutlinedInput-input {
+  padding: 4px 0; /* Finjustera textens position */
+  font-size: 0.95em;
+}
+/* Ta bort default outline/border */
+.input-area .MuiOutlinedInput-notchedOutline { border: none !important; }
+
+.input-area .MuiButton-root { /* Skicka-knappen */
+  border-radius: 50%;
+  min-width: 46px; /* Justera storlek */
+  height: 46px;
+  padding: 0;
+  background-color: #4e73df;
+  box-shadow: 0 2px 5px rgba(78, 115, 223, 0.3);
+}
+.input-area .MuiButton-root:hover {
+  background-color: #3a5dd0;
+  box-shadow: 0 4px 8px rgba(78, 115, 223, 0.4);
+}
+
+
+/* --- Responsivitet (Behållen och justerad) --- */
+@media (max-width: 768px) {
+  .chat-container {
+    margin: 0;
+    padding: 10px;
+    height: calc(var(--vh, 1vh) * 100);
+    max-height: none;
+    border-radius: 0;
+    box-shadow: none;
   }
-  
-  /* Disabled question and scenario components */
-  .disabled-question, 
-  .disabled-scenario,
-  .disabled-feedback,
-  .disabled-roleplay,
-  .disabled-binary-question,
-  .disabled-exercise {
-    opacity: 0.85 !important;
-    pointer-events: none !important;
-    cursor: default !important;
-    box-shadow: none !important;
-    transition: opacity 0.3s ease !important;
-    position: relative;
-  }
-  
-  /* Ensure form controls in disabled components appear inactive */
-  .disabled-question .MuiFormControlLabel-root,
-  .disabled-question .MuiButton-root,
-  .disabled-scenario .MuiButton-root,
-  .disabled-binary-question .MuiButton-root,
-  .disabled-exercise .MuiButton-root {
-    cursor: default !important;
-    pointer-events: none !important;
-  }
-  
-  /* Style buttons in disabled components */
-  .disabled-question .question-submit-btn,
-  .disabled-scenario .scenario-option-btn {
-    background-color: #f0f0f0 !important;
-    color: #777777 !important;
-    border-color: #dddddd !important;
-    box-shadow: none !important;
-    transform: none !important;
-  }
-  
-  /* Ensure text remains readable in disabled components */
-  .disabled-feedback .feedback-content,
-  .disabled-roleplay .dialogue-message,
-  .disabled-scenario .scenario-description {
-    color: #444444 !important;
-  }
-  
-  /* Style for disabled role play dialogs */
-  .disabled-roleplay .roleplay-header {
-    opacity: 0.9 !important;
-  }
-  
-  .disabled-roleplay .dialogue-avatar {
-    filter: grayscale(30%) !important;
-  }
-  
-  /* Style for disabled suggestion buttons */
-  .suggestions-container .suggestion-button[disabled] {
-    background-color: rgba(78, 115, 223, 0.7) !important;
-    color: rgba(255, 255, 255, 0.8) !important;
-    box-shadow: none !important;
-    transform: none !important;
-  }
-  
-  /* Prevent hover effects on disabled elements */
-  .disabled-question:hover,
-  .disabled-scenario:hover,
-  .disabled-feedback:hover,
-  .disabled-roleplay:hover,
-  .disabled-binary-question:hover,
-  .disabled-exercise:hover {
-    transform: none !important;
-    box-shadow: none !important;
-  }
-  
-  /* Visual overlay indicator for disabled elements */
-  .disabled-question::after,
-  .disabled-scenario::after,
-  .disabled-feedback::after,
-  .disabled-roleplay::after,
-  .disabled-binary-question::after,
-  .disabled-exercise::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(248, 248, 248, 0.1);
-    border-radius: inherit;
-    pointer-events: none;
-    z-index: 2;
-  }
-  
-  /* Specific style adjustments for each component type */
-  .disabled-scenario .scenario-header {
-    background: linear-gradient(to right, #ffb74d, #ffcc80) !important;
-  }
-  
-  .disabled-roleplay .roleplay-header {
-    background-color: #6c8ae4 !important;
-  }
-  
-  .disabled-binary-question .binary-options {
-    opacity: 0.85 !important;
-  }
-  
-  .disabled-question .matching-select,
-  .disabled-question .matching-item {
-    background-color: #f8f8f8 !important;
-    border-color: #e0e0e0 !important;
-  }
-  
-  .disabled-question .ordering-item {
-    background-color: #f5f5f5 !important;
-    box-shadow: none !important;
-  }
-  
-  /* Override for selection options to ensure they appear correctly disabled */
-  .disabled-question select,
-  .disabled-question input[type="radio"],
-  .disabled-question input[type="checkbox"] {
-    opacity: 0.7 !important;
-    cursor: default !important;
-  }
-  
-  /* Special styles for the exercise container when disabled */
-  .disabled-exercise .exercise-instruction {
-    color: #546e7a !important;
-  }
-  
-  .disabled-exercise .exercise-description {
-    color: #78909c !important;
-  }
-  
-  .disabled-exercise .exercise-options .MuiButton-root {
-    background-color: #f0f0f0 !important;
-    color: #757575 !important;
-    border-color: #d0d0d0 !important;
-  }
-  
-  /* Responsive adjustments */
-  @media (max-width: 768px) {
-    .chat-container {
-      padding: 15px;
-      height: calc(100vh - 30px);
-      border-radius: 0;
-    }
-    
-    .chat-message {
-      max-width: 90%;
-      padding: 10px 14px;
-    }
-    
-    .chat-header h1 {
-      font-size: 1.5em;
-    }
-    
-    .input-area {
-      padding: 10px;
-    }
-    
-    .tts-widget {
-      width: 45px;
-      height: 45px;
-      top: 10px;
-      right: 10px;
-    }
-    
-    .tts-widget-icon {
-      font-size: 1.2rem;
-    }
-    
-    .exercise-options, .suggestions-container {
-      flex-direction: column;
-      gap: 6px;
-    }
-    
-    .exercise-options .MuiButton-root, .suggestion-button {
-      width: 100%;
-    }
-    
-    .scenario-options {
-      padding: 0;
-    }
-    
-    .matching-item {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    
-    .matching-select {
-      width: 100%;
-    }
-    
-    .dialogue-entry {
-      margin-bottom: 12px;
-    }
-    
-    .binary-options {
-      flex-direction: column;
-      gap: 8px;
-    }
-    
-    .binary-option-btn {
-      width: 100% !important;
-    }
-    
-    .animate-in-paragraph {
-      margin-bottom: 0.6em;
-    }
-    
-    .quick-response-container {
-      flex-direction: column;
-      width: 100%;
-    }
-    
-    .quick-response-chip {
-      width: 100% !important;
-    }
-  }
-  
-  /* For very small screens */
-  @media (max-width: 480px) {
-    .chat-container {
-      padding: 10px;
-    }
-    
-    .chat-message {
-      max-width: 95%;
-      padding: 8px 10px;
-      font-size: 0.95em;
-    }
-    
-    .exercise-container,
-    .question-container,
-    .scenario-card,
-    .roleplay-container {
-      padding: 10px;
-      margin: 8px 0;
-    }
-    
-    .input-area {
-      flex-direction: column;
-      padding: 10px;
-    }
-    
-    .input-area .MuiTextField-root {
-      width: 100%;
-      margin-bottom: 10px;
-    }
-    
-    .input-area .MuiButton-root {
-      width: 100%;
-    }
-    
-    .dialogue-avatar {
-      width: 30px !important;
-      height: 30px !important;
-      font-size: 0.85rem !important;
-    }
-    
-    .ai-thinking {
-      padding: 8px 12px;
-    }
-    
-    .quick-responses-area {
-      padding: 8px 0;
-    }
-  }
+  .chat-message { max-width: 90%; }
+  .chat-header h1 { font-size: 1.3em; }
+  .quick-response-container { gap: 6px; }
+  .quick-response-chip { height: 30px !important; font-size: 0.8rem !important; }
+  .input-area { padding: 8px 10px; gap: 6px; }
+  .input-area .MuiButton-root { min-width: 42px; height: 42px; }
+}
+
+@media (max-width: 480px) {
+  .chat-message { max-width: 92%; font-size: 0.9em; padding: 8px 12px; }
+  .chat-header h1 { font-size: 1.2em; }
+  .interactive-content-wrapper { margin-top: 10px; }
+  .quick-responses-area { padding: 6px 8px; }
+  .input-area { padding: 6px 8px; }
+}
