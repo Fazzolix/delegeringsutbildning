@@ -2,16 +2,17 @@
 """
 Denna modul hanterar AI-integrationen för delegeringsutbildningen.
 Använder nu Flask-Session för att hantera chatthistorik mellan requests.
+Konverterar Gemini-historik till serialiserbart format innan lagring.
 """
 
 import os
 import json
 import logging
 import hashlib
-# Importera 'session' från Flask för att hantera sessionsdata
 from flask import Blueprint, request, jsonify, send_from_directory, session
 from dotenv import load_dotenv
 import google.generativeai as genai
+import redis # Importera för att fånga ConnectionError
 
 # Importera parsing-funktioner och konstanter
 from parsing_utils import parse_ai_response, INTERACTIVE_KEYS
@@ -31,15 +32,11 @@ logger = logging.getLogger(__name__)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
-    # Överväg att kasta ett fel här för att förhindra start utan nyckel
-    # raise ValueError("GEMINI_API_KEY is not defined in environment.")
+    # raise ValueError("GEMINI_API_KEY is not defined in environment.") # Överväg att avkommentera
 
-# Ta bort globala chat_sessions dict
-# chat_sessions = {}
-
-# Global promptkonfiguration
+# Global promptkonfiguration (oförändrad)
 admin_prompt_config = [
-    # ... (resten av din promptkonfiguration förblir oförändrad) ...
+    # ... (din promptkonfiguration här) ...
     {
         "title": "",
         "content": "Du är en varm och pedagogisk expertlärare specialiserad på **delegering inom kommunal vård och omsorg**. "
@@ -327,7 +324,8 @@ image_assets = {
      "image14": { "url": f"{BACKEND_BASE_URL}/static/images/image14.png", "description": "Beskrivning bild 14"},
 }
 
-# Funktioner för att bygga prompt etc. (oförändrade)
+
+# --- Helper-funktioner för prompt etc. (Oförändrade) ---
 def get_prompt_hash():
     prompt_json = json.dumps(admin_prompt_config, sort_keys=True)
     return hashlib.md5(prompt_json.encode('utf-8')).hexdigest()
@@ -375,11 +373,10 @@ def build_system_instruction(user_answers):
     system_instruction = "\n\n".join(instruction_parts)
     return system_instruction
 
-# Funktion för att bygga initial historik (oförändrad)
 def build_initial_history(user_answers, user_message, user_name):
     greeting = f"Välkommen {user_name} till delegeringsutbildningen!\n"
     greeting += "Jag är din lärare, du kan kalla mig Lexi. I denna utbildningen fokuserar vi på **läkemedelstilldelning via delegering**, för dig som jobbar i Skövde kommun.\n\n"
-    # ... (resten av greeting-logiken är oförändrad) ...
+    # ... (resten av greeting-logiken oförändrad) ...
     if user_answers.get('underskoterska', 'nej') == 'ja':
         greeting += (
             "Som undersköterska har du en viktig roll i vård och omsorgs arbetet. Denna utbildning är utformad för att ge dig den kompetens som krävs för säker läkemedelstilldelning via delegering.\n"
@@ -406,16 +403,15 @@ def build_initial_history(user_answers, user_message, user_name):
         "**Målet är att du ska förstå och lära dig grunderna inom bland annat läkemedelstilldelning för att du ska ha en bra grund att stå på inför att du träffar sjuksköterskan.** Nedanför finns en chattruta, den kommer du använda för att interagera med mig, jag kommer bland annat att ge dig information, ställa frågor och så vidare. Detta för att jag ska känna att du förstått. Du kan alltid be mig förklara igen, eller säga att du inte förstår. Vi går igenom det här tillsammans. "
         "Är du redo att börja? Skriv 'fortsätt' när du är redo i chattrutan."
     )
-    # Historiken innehåller nu bara AI:ns första meddelande.
-    # Användarens 'start'-meddelande behövs inte i historiken för Gemini.
+    # Denna funktion returnerar redan historiken i det enkla, serialiserbara formatet.
     history_for_session = [{
         "role": "model",
         "parts": [{"text": greeting}]
     }]
     return greeting, history_for_session
 
-# Funktion för att hämta modellen (oförändrad)
 def get_gemini_model(user_answers):
+    # (Oförändrad)
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY är inte definierat.")
     genai.configure(api_key=GEMINI_API_KEY)
@@ -430,67 +426,90 @@ def get_gemini_model(user_answers):
     )
     return model
 
+# --- NY HJÄLPFUNKTION för att konvertera historik ---
+def convert_gemini_history_to_serializable(gemini_history):
+    """Konverterar Geminis historikobjekt till en JSON-serialiserbar lista av dicts."""
+    serializable_history = []
+    if not gemini_history:
+        return serializable_history
+    for turn in gemini_history:
+        # Säkerställ att vi bara tar med textdelar
+        serializable_parts = []
+        if hasattr(turn, 'parts') and turn.parts:
+            for part in turn.parts:
+                if hasattr(part, 'text') and part.text is not None:
+                    serializable_parts.append({'text': part.text})
+                # Lägg till hantering för andra serialiserbara delar om nödvändigt,
+                # men för ren textchatt räcker detta. Undvik att spara funktioner etc.
+        if serializable_parts: # Lägg bara till turn om den har innehåll
+             serializable_history.append({
+                 'role': getattr(turn, 'role', 'unknown'), # Hämta rollen säkert
+                 'parts': serializable_parts
+             })
+        else:
+            logger.warning(f"Skipping history turn with no serializable parts: {turn}")
+
+    return serializable_history
+# ---------------------------------------------------
+
 @ai_bp.route('/api/chat', methods=['POST'])
 def chat():
     """
-    Hanterar chattförfrågningar och använder Flask-Session för att lagra historik.
+    Hanterar chattförfrågningar och använder Flask-Session för att lagra
+    en serialiserbar version av historiken.
     """
     data = request.get_json()
-    user_answers = data.get('answers', {}) # Bakgrundssvar (kan vara tom efter första request)
+    user_answers = data.get('answers', {})
     user_message = data.get('message', '')
-    user_name = data.get('name', 'Användare') # Användarnamn (behövs ej för session-nyckel, men för hälsning)
+    user_name = data.get('name', 'Användare')
 
     if not user_message:
         return jsonify({"error": "Message cannot be empty"}), 400
 
     try:
         current_hash = get_prompt_hash()
-        chat_session_obj = None # Kommer hålla Gemini ChatSession-objektet
+        chat_session_obj = None # Håller Gemini ChatSession-objektet
 
         # --- Session Management med Flask-Session ---
-        # Hämta sparad kontext från sessionen
         chat_context = session.get('chat_context')
 
-        # Kontrollera om en session finns och prompt-hashen matchar
         if chat_context and chat_context.get('hash') == current_hash:
             logger.info(f"Existing session context found for user.")
-            # Hämta historiken från sessionen
+            # Hämta den *serialiserbara* historiken
             retrieved_history = chat_context.get('history', [])
-            if not retrieved_history:
-                 logger.warning("Session context found, but history was empty. Starting fresh.")
+            if not retrieved_history and user_message.strip().lower() != "start":
+                 logger.warning("Session context found, but history was empty. Re-initializing.")
                  chat_context = None # Force recreation
             else:
-                 # Återskapa Gemini-modellen och starta chatten med den sparade historiken
                  try:
-                     model = get_gemini_model(user_answers) # Behöver user_answers här om prompten ändrats
+                     model = get_gemini_model(user_answers)
+                     # Återskapa sessionen med den serialiserbara historiken
                      chat_session_obj = model.start_chat(history=retrieved_history)
-                     logger.info(f"Recreated chat session from history (length: {len(retrieved_history)}).")
+                     logger.info(f"Recreated chat session from serializable history (length: {len(retrieved_history)}).")
                  except Exception as model_err:
                       logger.error(f"Error recreating Gemini model/session from history: {model_err}", exc_info=True)
-                      # Fallback: Skapa en ny session
                       chat_context = None # Force recreation
         else:
             if not chat_context:
                 logger.info("No session context found for user. Creating new one.")
-            else: # Hash mismatch
+            else:
                 logger.info(f"Prompt hash changed (Session: {chat_context.get('hash')}, Current: {current_hash}). Creating new session.")
-            # Ta bort gammal session om hash inte matchar
             session.pop('chat_context', None)
-            chat_context = None # Markera för att skapa ny
+            chat_context = None
 
-        # Skapa ny session om ingen giltig hittades/återskapades
+        # Skapa ny session om nödvändigt
         if chat_context is None:
             logger.info("Initializing new chat session.")
-            initial_greeting, initial_history = build_initial_history(user_answers, user_message, user_name)
+            initial_greeting, initial_history_serializable = build_initial_history(user_answers, user_message, user_name)
 
-            # Om det första meddelandet är 'start', returnera bara hälsningen
             if user_message.strip().lower() == "start":
-                # Spara den initiala kontexten (historik + hash) i sessionen
-                session['chat_context'] = {'history': initial_history, 'hash': current_hash}
-                logger.info("Stored initial history in session for 'start' message.")
-                # Parse greeting for potential interactive elements (osannolikt men säkrast)
+                session['chat_context'] = {'history': initial_history_serializable, 'hash': current_hash}
+                session.modified = True # Viktigt att markera sessionen som ändrad
+                logger.info("Stored initial serializable history in session for 'start' message.")
+
                 parsed_greeting = parse_ai_response(initial_greeting)
                 interactive_element = None
+                # ...(kod för att hantera interactive element i greeting oförändrad)...
                 if parsed_greeting.get("interactiveJson") and isinstance(parsed_greeting["interactiveJson"], dict):
                     for key in parsed_greeting["interactiveJson"]:
                         if key in INTERACTIVE_KEYS:
@@ -499,6 +518,7 @@ def chat():
                                 "data": parsed_greeting["interactiveJson"]
                             }
                             break
+
                 return jsonify({
                     "reply": {
                         "textContent": parsed_greeting["textContent"],
@@ -506,30 +526,26 @@ def chat():
                     }
                 })
             else:
-                # Om det *inte* var 'start' men vi ändå skapar nytt (t.ex. pga hashändring),
-                # starta sessionen med initial historik men fortsätt för att behandla nuvarande meddelande
                 try:
                     model = get_gemini_model(user_answers)
-                    chat_session_obj = model.start_chat(history=initial_history)
-                    # Spara direkt så vi har den för nästa steg
-                    session['chat_context'] = {'history': initial_history, 'hash': current_hash}
-                    session.modified = True # Markera sessionen som ändrad
-                    logger.info("Stored initial history for new session (non-start message).")
+                    # Starta med den *initiala*, redan serialiserbara historiken
+                    chat_session_obj = model.start_chat(history=initial_history_serializable)
+                    session['chat_context'] = {'history': initial_history_serializable, 'hash': current_hash}
+                    session.modified = True
+                    logger.info("Stored initial serializable history for new session (non-start message).")
                 except Exception as model_err:
                      logger.error(f"Error starting initial Gemini session: {model_err}", exc_info=True)
                      return jsonify({"reply": {"textContent": "Kunde inte initiera chattsessionen.", "interactiveElement": None}}), 500
 
-
-        # --- Generera AI-svar (om vi har en chat_session_obj) ---
+        # --- Generera AI-svar ---
         if not chat_session_obj:
-             # Detta bör inte hända om 'start'-logiken hanteras korrekt
              logger.error("Chat session object is unexpectedly None after session handling.")
              return jsonify({"reply": {"textContent": "Ett oväntat sessionsfel inträffade.", "interactiveElement": None}}), 500
 
         logger.info(f"Sending message to Gemini: '{user_message[:50]}...'")
         response = chat_session_obj.send_message(content=user_message)
 
-        # Extrahera AI-svar (samma logik som tidigare)
+        # Extrahera AI-svar (oförändrat)
         ai_reply_raw = ""
         try:
             if hasattr(response, 'text') and response.text is not None:
@@ -547,23 +563,26 @@ def chat():
 
         logger.info(f"Received raw reply from Gemini: '{ai_reply_raw[:100]}...'")
 
-        # --- Uppdatera historiken i sessionen ---
-        # Hämta aktuell historik från Gemini-objektet (den har uppdaterats av send_message)
-        updated_history = chat_session_obj.history
-        # Uppdatera sessionen med den nya historiken
-        session['chat_context']['history'] = updated_history
+        # --- Uppdatera historiken i sessionen (med konvertering!) ---
+        updated_history_gemini = chat_session_obj.history
+        # *** VIKTIGT: Konvertera innan lagring ***
+        serializable_history = convert_gemini_history_to_serializable(updated_history_gemini)
+        session['chat_context']['history'] = serializable_history
         session.modified = True # Markera att sessionen ska sparas
-        logger.info(f"Updated session history (new length: {len(updated_history)}).")
+        logger.info(f"Converted and updated session history (new length: {len(serializable_history)}).")
 
-    except ValueError as ve: # T.ex. saknad API-nyckel
+    except ValueError as ve:
         logger.error(f"Configuration error: {ve}")
-        # Undvik att skicka detaljer till klienten
         return jsonify({"reply": {"textContent": "Ett konfigurationsfel inträffade.", "interactiveElement": None}}), 500
     except redis.exceptions.ConnectionError as redis_err:
          logger.error(f"Redis connection error: {redis_err}", exc_info=True)
-         return jsonify({"reply": {"textContent": "Kunde inte ansluta till sessionlagringen. Försök igen senare.", "interactiveElement": None}}), 503 # Service Unavailable
+         # Försök rensa sessionen för att undvika problem vid nästa försök?
+         session.pop('chat_context', None)
+         return jsonify({"reply": {"textContent": "Problem med anslutning till sessionen. Försök igen.", "interactiveElement": None}}), 503
     except Exception as e:
-        logger.error(f"Error during chat processing: {e}", exc_info=True)
+        # Inkludera TypeError här nu när vi vet att det kan hända vid serialisering
+        # om konverteringen skulle misslyckas av någon anledning.
+        logger.error(f"Error during chat processing (incl. potential serialization): {e}", exc_info=True)
         return jsonify({
             "reply": {
                 "textContent": "Ursäkta, jag stötte på ett problem när jag försökte svara. Vänligen försök igen.",
@@ -571,8 +590,9 @@ def chat():
             }
         }), 500
 
-    # --- Parsa AI-svaret och konstruera svar till frontend ---
+    # --- Parsa och returnera svar (oförändrat) ---
     parsed_response = parse_ai_response(ai_reply_raw)
+    # ...(resten av parse/response-logiken är oförändrad)...
     logger.info(f"Parsed response. Text: '{parsed_response['textContent'][:100]}...', JSON found: {parsed_response['interactiveJson'] is not None}")
 
     interactive_element_response = None
@@ -601,9 +621,9 @@ def chat():
     return jsonify(final_response)
 
 
-# if __name__ == '__main__': ... (lokal körning, oförändrad, men kom ihåg att den inte testar Redis om inte Redis körs lokalt och REDIS_URL är satt)
+# Lokal körning (oförändrad)
 if __name__ == '__main__':
-    # This block is for local development testing only
+    # ... (samma kod som tidigare för lokal körning) ...
     from flask import Flask
     from flask_cors import CORS
     from flask_session import Session
