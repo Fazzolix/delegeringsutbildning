@@ -25,9 +25,14 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__, static_folder=os.path.join(basedir, 'static'))
 
 # --- Flask-Session Configuration ---
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key-change-me!')
-if app.config['SECRET_KEY'] == 'fallback-secret-key-change-me!':
-    logger.warning("Using fallback SECRET_KEY. Please set a strong SECRET_KEY environment variable.")
+# VIKTIGT: Säkerställ att SECRET_KEY är satt i Render Environment!
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+if not app.config['SECRET_KEY']:
+    logger.error("FATAL: SECRET_KEY environment variable is not set!")
+    # I en riktig produktionsmiljö bör appen inte starta utan SECRET_KEY.
+    # Sätt ett osäkert fallback ENDAST för att undvika krasch under felsökning om den saknas.
+    app.config['SECRET_KEY'] = 'unsafe-dev-key-replace-me-immediately'
+    logger.warning("!!! Using UNSAFE fallback SECRET_KEY. Set a proper environment variable! !!!")
 
 app.config['SESSION_TYPE'] = 'redis'
 redis_url = os.getenv('REDIS_URL')
@@ -37,7 +42,7 @@ if not redis_url:
 else:
     try:
         redis_client = redis.from_url(redis_url, decode_responses=False)
-        redis_client.ping()
+        redis_client.ping() # Verifiera anslutning vid start
         app.config['SESSION_REDIS'] = redis_client
         logger.info(f"Successfully connected to Redis at {redis_url.split('@')[-1]}")
     except redis.exceptions.ConnectionError as e:
@@ -47,59 +52,59 @@ else:
         logger.error(f"Error creating Redis client: {e}")
         app.config['SESSION_REDIS'] = None
 
-# *** Explicit Cookie-konfiguration ***
+# *** Explicit Cookie-konfiguration (med SameSite='None') ***
 app.config['SESSION_COOKIE_SECURE'] = True # Krävs för SameSite='None' och HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'None' # Ändrat till 'None' för cross-site context
+app.config['SESSION_COOKIE_SAMESITE'] = 'None' # Tillåter cross-site cookies (kräver Secure=True)
 app.config['SESSION_COOKIE_PATH'] = '/'
 
-# --- DEBUG Logging för URL:er ---
+# --- DEBUG Logging för URL:er och Domänlogik ---
 frontend_url_str = os.getenv('FRONTEND_URL', '')
 backend_url_str = os.getenv('BACKEND_URL', '')
-logger.info(f"DEBUG: Read FRONTEND_URL from env: '{frontend_url_str}'")
-logger.info(f"DEBUG: Read BACKEND_URL from env: '{backend_url_str}'")
-# -----------------------------
+logger.info(f"DEBUG_URL: Read FRONTEND_URL from env: '{frontend_url_str}'")
+logger.info(f"DEBUG_URL: Read BACKEND_URL from env: '{backend_url_str}'")
+# -------------------------------------------
 
 # Försök att sätta en gemensam toppdomän för cookien
 try:
-    # Kontrollera att URL:erna inte är tomma innan parsning
     if not frontend_url_str or not backend_url_str:
-         logger.warning("FRONTEND_URL or BACKEND_URL is empty. Cannot attempt to set SESSION_COOKIE_DOMAIN.")
-         raise ValueError("URL missing") # Gå till except-blocket
+         logger.warning("DEBUG_URL: FRONTEND_URL or BACKEND_URL is empty. Cannot attempt to set SESSION_COOKIE_DOMAIN.")
+         raise ValueError("URL missing")
 
     frontend_parsed = urlparse(frontend_url_str)
     backend_parsed = urlparse(backend_url_str)
 
-    # Kontrollera att netloc (domän+port) finns
     if not frontend_parsed.netloc or not backend_parsed.netloc:
-        logger.warning(f"Could not extract domain/netloc from URLs: Frontend='{frontend_parsed.netloc}', Backend='{backend_parsed.netloc}'. Cannot set SESSION_COOKIE_DOMAIN.")
-        raise ValueError("netloc missing") # Gå till except-blocket
+        logger.warning(f"DEBUG_URL: Could not extract domain/netloc from URLs: Frontend='{frontend_parsed.netloc}', Backend='{backend_parsed.netloc}'. Cannot set SESSION_COOKIE_DOMAIN.")
+        raise ValueError("netloc missing")
 
     frontend_domain_parts = frontend_parsed.netloc.split('.')
     backend_domain_parts = backend_parsed.netloc.split('.')
 
-    logger.info(f"DEBUG: Parsed frontend domain parts: {frontend_domain_parts}")
-    logger.info(f"DEBUG: Parsed backend domain parts: {backend_domain_parts}")
+    logger.info(f"DEBUG_URL: Parsed frontend domain parts: {frontend_domain_parts}")
+    logger.info(f"DEBUG_URL: Parsed backend domain parts: {backend_domain_parts}")
 
-    # Jämför de två sista delarna (t.ex. ['onrender', 'com'])
+    # Jämför de två sista delarna
     if len(frontend_domain_parts) >= 2 and len(backend_domain_parts) >= 2 and \
        frontend_domain_parts[-2:] == backend_domain_parts[-2:]:
-        base_domain = "." + ".".join(frontend_domain_parts[-2:])
+        base_domain = "." + ".".join(frontend_domain_parts[-2:]) # Ex: .onrender.com
         app.config['SESSION_COOKIE_DOMAIN'] = base_domain
         logger.info(f"Setting SESSION_COOKIE_DOMAIN to: {base_domain}")
     else:
         logger.info(f"Frontend ({'.'.join(frontend_domain_parts[-2:])}) and Backend ({'.'.join(backend_domain_parts[-2:])}) TLDs do not match. Not setting SESSION_COOKIE_DOMAIN.")
-        # Låt SESSION_COOKIE_DOMAIN vara default (None), binder till exakt backend-domän.
+
 except Exception as parse_err:
     logger.warning(f"Could not parse URLs or parts mismatch, proceeding without setting SESSION_COOKIE_DOMAIN. Error: {parse_err}")
 
+
 # Logga slutgiltiga cookie-inställningar innan Session initieras
+# Använder .get() för att säkert hämta värden som kanske inte är satta
 logger.info(
     f"Final cookie settings before Session init: "
-    f"Secure={app.config['SESSION_COOKIE_SECURE']}, "
-    f"SameSite={app.config['SESSION_COOKIE_SAMESITE']}, "
-    f"Path={app.config['SESSION_COOKIE_PATH']}, "
-    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}" # Använd .get() här också
+    f"Secure={app.config.get('SESSION_COOKIE_SECURE')}, "
+    f"SameSite={app.config.get('SESSION_COOKIE_SAMESITE')}, "
+    f"Path={app.config.get('SESSION_COOKIE_PATH')}, "
+    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}"
 )
 
 # Initiera Flask-Session
@@ -108,6 +113,7 @@ if app.config.get('SESSION_REDIS'):
     logger.info("Flask-Session initialized with Redis backend.")
 else:
     logger.error("Flask-Session could not be initialized with Redis due to connection issues.")
+
 
 # --- CORS Configuration ---
 cors_origins = []
@@ -122,10 +128,11 @@ cors_origins.append("http://localhost:3000")
 logger.info(f"Configuring CORS for origins: {cors_origins}")
 
 CORS(app,
-     supports_credentials=True,
+     supports_credentials=True, # Viktigt!
      origins=cors_origins
     )
 # -------------------------
+
 
 # Define an absolute path to the database
 db_path = os.path.join(basedir, 'database.db')
@@ -150,7 +157,7 @@ init_db()
 @app.route('/static/<path:filename>')
 def serve_static_files(filename):
     static_dir = app.static_folder
-    logger.info(f"Attempting to serve static file: {filename} from {static_dir}")
+    #logger.info(f"Attempting to serve static file: {filename} from {static_dir}") # Ta bort spam
     try:
         return send_from_directory(static_dir, filename)
     except FileNotFoundError:
@@ -162,8 +169,7 @@ def serve_static_files(filename):
 
 @app.route('/')
 def index():
-    # Uppdaterat meddelande för att reflektera senaste ändringar
-    return jsonify({"message": "Backend API is running! Refactored version with Redis sessions, explicit cookie settings (SameSite=None) and URL debug logging."})
+    return jsonify({"message": "Backend API running with Redis sessions, SameSite=None, and debug logs."})
 
 # API endpoint to save user name
 @app.route('/api/user', methods=['POST'])
