@@ -15,3 +15,5 @@ python-dotenv==1.0.0
 google-generativeai
 elevenlabs==0.2.24
 gunicorn==21.2.0
+Flask-Session==0.8.0
+redis==5.0.7
