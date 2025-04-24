@@ -47,70 +47,85 @@ else:
         logger.error(f"Error creating Redis client: {e}")
         app.config['SESSION_REDIS'] = None
 
-# *** NYTT: Explicit Cookie-konfiguration ***
-# Sätt Secure=True om din frontend körs på HTTPS (vilket den gör på Render)
-app.config['SESSION_COOKIE_SECURE'] = True
+# *** Explicit Cookie-konfiguration ***
+app.config['SESSION_COOKIE_SECURE'] = True # Krävs för SameSite='None' och HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-# Sätt SameSite='Lax' som standard. 'None' kräver Secure=True och används om du
-# bäddar in från helt olika domäner, 'Lax' är oftast bra för API-anrop från
-# samma site eller subdomäner. Prova 'Lax' först.
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-# Sätt Path till roten så cookien är giltig för hela backend-applikationen
+app.config['SESSION_COOKIE_SAMESITE'] = 'None' # Ändrat till 'None' för cross-site context
 app.config['SESSION_COOKIE_PATH'] = '/'
 
-# Försök att sätta en gemensam toppdomän för cookien om möjligt
-# Detta hjälper om frontend och backend är på olika subdomäner av onrender.com
-# Exempel: frontend.onrender.com och backend.onrender.com
-# Vi vill sätta Domain=.onrender.com (notera punkten i början)
-# Detta görs BARA om både frontend och backend körs på Render/liknande domän.
-# Om du kör lokalt eller på olika toppdomäner, sätt INTE SESSION_COOKIE_DOMAIN.
+# --- DEBUG Logging för URL:er ---
 frontend_url_str = os.getenv('FRONTEND_URL', '')
-backend_url_str = os.getenv('BACKEND_URL', '') # Antag att du har BACKEND_URL också? Annars hoppa över detta.
+backend_url_str = os.getenv('BACKEND_URL', '')
+logger.info(f"DEBUG: Read FRONTEND_URL from env: '{frontend_url_str}'")
+logger.info(f"DEBUG: Read BACKEND_URL from env: '{backend_url_str}'")
+# -----------------------------
 
+# Försök att sätta en gemensam toppdomän för cookien
 try:
+    # Kontrollera att URL:erna inte är tomma innan parsning
+    if not frontend_url_str or not backend_url_str:
+         logger.warning("FRONTEND_URL or BACKEND_URL is empty. Cannot attempt to set SESSION_COOKIE_DOMAIN.")
+         raise ValueError("URL missing") # Gå till except-blocket
+
     frontend_parsed = urlparse(frontend_url_str)
     backend_parsed = urlparse(backend_url_str)
 
-    # Kontrollera om båda verkar vara på samma basdomän (t.ex. onrender.com)
+    # Kontrollera att netloc (domän+port) finns
+    if not frontend_parsed.netloc or not backend_parsed.netloc:
+        logger.warning(f"Could not extract domain/netloc from URLs: Frontend='{frontend_parsed.netloc}', Backend='{backend_parsed.netloc}'. Cannot set SESSION_COOKIE_DOMAIN.")
+        raise ValueError("netloc missing") # Gå till except-blocket
+
     frontend_domain_parts = frontend_parsed.netloc.split('.')
     backend_domain_parts = backend_parsed.netloc.split('.')
 
+    logger.info(f"DEBUG: Parsed frontend domain parts: {frontend_domain_parts}")
+    logger.info(f"DEBUG: Parsed backend domain parts: {backend_domain_parts}")
+
+    # Jämför de två sista delarna (t.ex. ['onrender', 'com'])
     if len(frontend_domain_parts) >= 2 and len(backend_domain_parts) >= 2 and \
-       frontend_domain_parts[-2:] == backend_domain_parts[-2:]: # Jämför de två sista delarna (t.ex. ['onrender', 'com'])
+       frontend_domain_parts[-2:] == backend_domain_parts[-2:]:
         base_domain = "." + ".".join(frontend_domain_parts[-2:])
         app.config['SESSION_COOKIE_DOMAIN'] = base_domain
         logger.info(f"Setting SESSION_COOKIE_DOMAIN to: {base_domain}")
     else:
-        logger.info("Frontend and Backend URLs do not seem to share a common base domain. Not setting SESSION_COOKIE_DOMAIN.")
-        # Låt SESSION_COOKIE_DOMAIN vara default (None), vilket binder den till exakt backend-domän.
+        logger.info(f"Frontend ({'.'.join(frontend_domain_parts[-2:])}) and Backend ({'.'.join(backend_domain_parts[-2:])}) TLDs do not match. Not setting SESSION_COOKIE_DOMAIN.")
+        # Låt SESSION_COOKIE_DOMAIN vara default (None), binder till exakt backend-domän.
 except Exception as parse_err:
-    logger.warning(f"Could not parse FRONTEND_URL/BACKEND_URL to set SESSION_COOKIE_DOMAIN: {parse_err}")
+    logger.warning(f"Could not parse URLs or parts mismatch, proceeding without setting SESSION_COOKIE_DOMAIN. Error: {parse_err}")
 
-# ****************************************
+# Logga slutgiltiga cookie-inställningar innan Session initieras
+logger.info(
+    f"Final cookie settings before Session init: "
+    f"Secure={app.config['SESSION_COOKIE_SECURE']}, "
+    f"SameSite={app.config['SESSION_COOKIE_SAMESITE']}, "
+    f"Path={app.config['SESSION_COOKIE_PATH']}, "
+    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}" # Använd .get() här också
+)
 
 # Initiera Flask-Session
-if app.config.get('SESSION_REDIS'): # Använd .get() för att undvika KeyError om det inte sattes
+if app.config.get('SESSION_REDIS'):
     Session(app)
     logger.info("Flask-Session initialized with Redis backend.")
 else:
     logger.error("Flask-Session could not be initialized with Redis due to connection issues.")
-    # Överväg fallback eller exit
 
 # --- CORS Configuration ---
-# Hämta frontend URL för CORS
-frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-cors_origins = [frontend_url]
-if "localhost" not in frontend_url: # Lägg till localhost för lokal utveckling om inte redan där
-    cors_origins.append("http://localhost:3000")
+cors_origins = []
+frontend_url_from_env = os.getenv('FRONTEND_URL')
+if frontend_url_from_env:
+    cors_origins.append(frontend_url_from_env)
+else:
+    logger.warning("FRONTEND_URL environment variable not set, CORS might not allow frontend requests.")
+# Lägg alltid till localhost för lokal utveckling
+cors_origins.append("http://localhost:3000")
 
 logger.info(f"Configuring CORS for origins: {cors_origins}")
 
 CORS(app,
-     supports_credentials=True, # Krävs för att webbläsaren ska skicka cookies
-     origins=cors_origins # Tillåt endast från specificerade origins
+     supports_credentials=True,
+     origins=cors_origins
     )
 # -------------------------
-
 
 # Define an absolute path to the database
 db_path = os.path.join(basedir, 'database.db')
@@ -147,7 +162,8 @@ def serve_static_files(filename):
 
 @app.route('/')
 def index():
-    return jsonify({"message": "Backend API is running! Refactored version with Redis sessions and explicit cookie settings."})
+    # Uppdaterat meddelande för att reflektera senaste ändringar
+    return jsonify({"message": "Backend API is running! Refactored version with Redis sessions, explicit cookie settings (SameSite=None) and URL debug logging."})
 
 # API endpoint to save user name
 @app.route('/api/user', methods=['POST'])
@@ -162,7 +178,10 @@ def save_user():
             c = conn.cursor()
             c.execute('INSERT INTO users (name) VALUES (?)', (name,))
             conn.commit()
-        logger.info(f"User name saved: {name}")
+        # Sätt ett testvärde i sessionen här för att se om Set-Cookie skickas
+        session['user_saved'] = name
+        session.modified = True
+        logger.info(f"User name saved: {name}. Test session value set.")
         return jsonify({'message': 'Name saved successfully!'})
     except sqlite3.Error as e:
         logger.error(f"Database error saving user {name}: {e}")
