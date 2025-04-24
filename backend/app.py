@@ -1,9 +1,11 @@
 # backend/app.py
 import os
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, session # Importera session
 from flask_cors import CORS
+from flask_session import Session # Importera Flask-Session
+import redis # Importera redis
 import sqlite3
-from ai import ai_bp   # Your AI module with refactored chat endpoint
+from ai import ai_bp
 from dotenv import load_dotenv
 import logging
 
@@ -21,19 +23,61 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # Initialize Flask app, explicitly setting the static folder relative to basedir
 app = Flask(__name__, static_folder=os.path.join(basedir, 'static'))
 
+# --- Flask-Session Configuration ---
+# VIKTIGT: Sätt en stark, hemlig nyckel i din miljö (.env och Render)!
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key-change-me!')
+if app.config['SECRET_KEY'] == 'fallback-secret-key-change-me!':
+    logger.warning("Using fallback SECRET_KEY. Please set a strong SECRET_KEY environment variable.")
+
+app.config['SESSION_TYPE'] = 'redis' # Använd Redis som backend
+redis_url = os.getenv('REDIS_URL')
+if not redis_url:
+    logger.error("REDIS_URL is not set. Cannot configure Flask-Session with Redis.")
+    # Fallback eller exit? För nu sätter vi None, Flask-Session kommer klaga.
+    app.config['SESSION_REDIS'] = None
+else:
+    try:
+        # Skapa en Redis-klientinstans från URL:en
+        # decode_responses=True är ofta bra, men Gemini historik kan innehålla komplexa objekt,
+        # så vi låter Flask-Session hantera serialisering/deserialisering.
+        # OBS: Kontrollera att redis-py versionen stödjer from_url med ssl_cert_reqs=None om du använder rediss://
+        # För Render's interna Redis behövs oftast inte SSL.
+        redis_client = redis.from_url(redis_url, decode_responses=False) # Behåll bytes för Flask-Session
+        redis_client.ping() # Testa anslutningen
+        app.config['SESSION_REDIS'] = redis_client
+        logger.info(f"Successfully connected to Redis at {redis_url.split('@')[-1]}") # Logga utan creds
+    except redis.exceptions.ConnectionError as e:
+        logger.error(f"Failed to connect to Redis at {redis_url.split('@')[-1]}: {e}")
+        app.config['SESSION_REDIS'] = None # Sätt till None om anslutningen misslyckas
+    except Exception as e:
+        logger.error(f"Error creating Redis client: {e}")
+        app.config['SESSION_REDIS'] = None
+
+# Ställ in sessionscookie-parametrar (valfritt men rekommenderat)
+app.config['SESSION_COOKIE_SECURE'] = True # Skicka bara cookie över HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True # Gör cookien oåtkomlig för JavaScript
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Skydd mot CSRF
+
+# Initiera Flask-Session
+if app.config['SESSION_REDIS']:
+    Session(app)
+    logger.info("Flask-Session initialized with Redis backend.")
+else:
+    logger.error("Flask-Session could not be initialized with Redis due to connection issues.")
+    # Överväg att stoppa appen här eller falla tillbaka till filsystem (mindre robust)
+    # app.config['SESSION_TYPE'] = 'filesystem'
+    # Session(app)
+    # logger.warning("Falling back to filesystem sessions (less robust).")
+# ------------------------------------
+
 # Configure CORS to allow requests from frontend
 frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-# Allow requests from Render preview environments as well if applicable
-# preview_url_pattern = r"https://your-app-pr-\d+\.onrender\.com" # Example pattern
 cors_origins = [frontend_url, "http://localhost:3000"]
-# Add preview URL pattern if needed (requires regex support in CORS or specific URLs)
 
-CORS(app, resources={
+CORS(app, supports_credentials=True, resources={ # Viktigt: supports_credentials=True för session cookies
     r"/api/*": {"origins": cors_origins},
-    # Allow static files from anywhere, but could restrict to cors_origins if needed
     r"/static/*": {"origins": "*"}
 })
-
 
 # Define an absolute path to the database
 db_path = os.path.join(basedir, 'database.db')
@@ -41,15 +85,11 @@ db_path = os.path.join(basedir, 'database.db')
 # Register AI blueprint
 app.register_blueprint(ai_bp)
 
-# TTS-funktionalitet är borttagen
-# Ingen import eller registrering av tts_bp eller dummy_tts_bp
-
 # Initialize the database: Create the "users" table if it doesn't exist
 def init_db():
     try:
         with sqlite3.connect(db_path) as conn:
             c = conn.cursor()
-            # Use IF NOT EXISTS to avoid errors on subsequent runs
             c.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,15 +104,11 @@ def init_db():
 init_db()
 
 # Serve static files (images)
-# This explicit route matches the URL structure used in ai.py
 @app.route('/static/<path:filename>')
 def serve_static_files(filename):
-    # Use the static_folder path defined in the Flask constructor
     static_dir = app.static_folder
     logger.info(f"Attempting to serve static file: {filename} from {static_dir}")
     try:
-        # Ensure the requested path is safe and within the static folder
-        # send_from_directory handles security checks like preventing path traversal
         return send_from_directory(static_dir, filename)
     except FileNotFoundError:
          logger.warning(f"Static file not found: {os.path.join(static_dir, filename)}")
@@ -81,10 +117,9 @@ def serve_static_files(filename):
         logger.error(f"Error serving static file {filename}: {e}")
         return jsonify({"error": "Could not serve file"}), 500
 
-
 @app.route('/')
 def index():
-    return jsonify({"message": "Backend API is running! Refactored version."})
+    return jsonify({"message": "Backend API is running! Refactored version with Redis sessions."})
 
 # API endpoint to save the user's name
 @app.route('/api/user', methods=['POST'])
@@ -98,7 +133,6 @@ def save_user():
     try:
         with sqlite3.connect(db_path) as conn:
             c = conn.cursor()
-            # Simple insertion, consider adding checks for existing users if needed
             c.execute('INSERT INTO users (name) VALUES (?)', (name,))
             conn.commit()
         logger.info(f"User name saved: {name}")
@@ -110,17 +144,15 @@ def save_user():
         logger.error(f"Unexpected error saving user {name}: {e}")
         return jsonify({'error': 'An unexpected error occurred'}), 500
 
-
 if __name__ == '__main__':
-    # Ensure static directory exists (especially important for local dev)
     static_images_dir = os.path.join(basedir, 'static', 'images')
     if not os.path.exists(static_images_dir):
          os.makedirs(static_images_dir, exist_ok=True)
          logger.info(f"Created directory: {static_images_dir}")
 
-    # Use PORT environment variable for Render or 10000 as default
     port = int(os.environ.get('PORT', 10000))
-    # Check FLASK_DEBUG env variable (set to 'True' or '1' for debug mode)
     is_debug = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1')
     logger.info(f"Starting Flask server on host 0.0.0.0, port {port}, Debug: {is_debug}")
+    # När du kör lokalt med `python app.py`, körs bara en process, så sessioner fungerar även utan Redis.
+    # Men det är bra att testa med Redis lokalt också om möjligt.
     app.run(host='0.0.0.0', port=port, debug=is_debug)
