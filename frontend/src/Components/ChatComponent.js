@@ -5,13 +5,16 @@ import axios from 'axios';
 import {
   Button, TextField, Box, Typography, FormControl, FormControlLabel, Radio,
   RadioGroup, Checkbox, FormGroup, Grid, Alert, Avatar, Chip, CircularProgress
-} from '@mui/material'; // Removed Paper, Card, CardHeader, CardContent where possible
+} from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
 import './ChatComponent.css'; // Keep your CSS file for styling
 
-// --- Helper Components (Simplified Wrappers, more robust checks) ---
+// ========================================================================== //
+// ======================= HELPER COMPONENTS START ======================== //
+// ========================================================================== //
 
+// --- Multiple Choice / Radio Component ---
 const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
     const [selectedOptions, setSelectedOptions] = useState({});
     const [submitted, setSubmitted] = useState(false);
@@ -19,9 +22,8 @@ const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = f
     useEffect(() => {
         setSelectedOptions({});
         setSubmitted(false);
-    }, [question]); // Reset local state if the question object itself changes
+    }, [question]);
 
-    // Defensive check for data structure
     if (!question || !Array.isArray(question.options)) {
         console.error("MultipleChoiceQuestion received invalid data:", question);
         return <Alert severity="warning">Frågedata saknas eller är ogiltig.</Alert>;
@@ -32,7 +34,7 @@ const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = f
         if (question.multiSelect) {
             setSelectedOptions(prev => ({ ...prev, [id]: !prev[id] }));
         } else {
-            setSelectedOptions({ [id]: true }); // Select only this one
+            setSelectedOptions({ [id]: true });
         }
     };
 
@@ -49,7 +51,6 @@ const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = f
     const GroupComponent = question.multiSelect ? FormGroup : RadioGroup;
 
     return (
-        // Removed Paper wrapper
         <div className={`question-container multiple-choice ${disabled ? 'disabled-interactive' : ''}`}>
             <Typography variant="body1" className="question-title">{question.text}</Typography>
             <GroupComponent>
@@ -61,10 +62,11 @@ const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = f
                                 checked={!!selectedOptions[option.id]}
                                 onChange={() => handleChange(option.id)}
                                 disabled={isSubmitting || disabled || submitted}
+                                size="small" // Smaller controls
                             />
                         }
-                        label={option.text}
-                        disabled={isSubmitting || disabled || submitted} // Disable label interaction too
+                        label={<Typography variant="body2">{option.text}</Typography>} // Ensure label text size is consistent
+                        disabled={isSubmitting || disabled || submitted}
                     />
                 ))}
             </GroupComponent>
@@ -74,8 +76,8 @@ const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = f
                 onClick={handleSubmit}
                 disabled={isSubmitting || Object.keys(selectedOptions).filter(k => selectedOptions[k]).length === 0 || disabled || submitted}
                 className="question-submit-btn"
-                size="small" // Smaller button
-                sx={{ mt: 1.5 }} // Adjusted margin
+                size="small"
+                sx={{ mt: 1.5 }}
             >
                 {isSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Svara'}
             </Button>
@@ -83,6 +85,7 @@ const MultipleChoiceQuestion = ({ question, onAnswer, isSubmitting, disabled = f
     );
 };
 
+// --- Matching Component ---
 const MatchingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
     const [matches, setMatches] = useState({});
     const [submitted, setSubmitted] = useState(false);
@@ -116,20 +119,19 @@ const MatchingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }
     const allItemsMatched = question.items.length > 0 && Object.keys(matches).length === question.items.length;
 
     return (
-        // Removed Paper wrapper
         <div className={`question-container matching-question ${disabled ? 'disabled-interactive' : ''}`}>
             <Typography variant="body1" className="question-title">{question.text}</Typography>
-            <Grid container spacing={1.5} sx={{ mt: 1 }}> {/* Added margin-top */}
+            <Grid container spacing={1.5} sx={{ mt: 1 }}>
                 {question.items.map((item) => (
-                    <Grid item xs={12} sm={6} key={item.id}> {/* Responsive grid */}
-                        <div className="matching-item"> {/* Use div instead of Paper */}
+                    <Grid item xs={12} sm={6} key={item.id}>
+                        <div className="matching-item">
                             <Typography variant="body2" className="item-text">{item.text}</Typography>
-                            <FormControl fullWidth variant="outlined" size="small"> {/* Styled select */}
+                            <FormControl fullWidth variant="outlined" size="small">
                                 <select
                                     value={matches[item.id] || ''}
                                     onChange={(e) => handleMatch(item.id, e.target.value)}
                                     disabled={isSubmitting || disabled || submitted}
-                                    className="matching-select" // Add CSS for this class
+                                    className="matching-select"
                                 >
                                     <option value="" disabled>Välj matchning...</option>
                                     {question.matches.map((match) => (
@@ -158,12 +160,12 @@ const MatchingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }
     );
 };
 
+// --- Ordering Component ---
 const OrderingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }) => {
     const [orderedItems, setOrderedItems] = useState(() => [...(question?.items || [])]);
     const [submitted, setSubmitted] = useState(false);
 
      useEffect(() => {
-        // Ensure items is an array before spreading
         setOrderedItems([...(Array.isArray(question?.items) ? question.items : [])]);
         setSubmitted(false);
     }, [question]);
@@ -188,12 +190,10 @@ const OrderingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }
     };
 
     return (
-        // Removed Paper wrapper
         <div className={`question-container ordering-question ${disabled ? 'disabled-interactive' : ''}`}>
             <Typography variant="body1" className="question-title">{question.text}</Typography>
             <div className="ordering-list">
                 {orderedItems.map((item, index) => (
-                    // Use div instead of Paper
                     <div key={item.id} className="ordering-item">
                         <Typography variant="body2" sx={{ flexGrow: 1, mr: 1 }}>{index + 1}. {item.text}</Typography>
                         <div className="ordering-controls">
@@ -218,6 +218,7 @@ const OrderingQuestion = ({ question, onAnswer, isSubmitting, disabled = false }
     );
 };
 
+// --- Scenario Component ---
 const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }) => {
     const [submitted, setSubmitted] = useState(false);
 
@@ -225,7 +226,6 @@ const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }
         setSubmitted(false);
     }, [scenario]);
 
-    // Improved data validation
     if (!scenario || typeof scenario.description !== 'string' || !Array.isArray(scenario.options)) {
         console.error("ScenarioQuestion received invalid data:", scenario);
         return <Alert severity="warning">Scenariodata saknas eller är ogiltig.</Alert>;
@@ -238,7 +238,6 @@ const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }
     }
 
     return (
-        // Removed Card structure, using simple divs
         <div className={`scenario-container ${disabled ? 'disabled-interactive' : ''}`}>
             {scenario.title && <Typography variant="h6" className="scenario-title">{scenario.title}</Typography>}
             <Typography variant="body1" className="scenario-description" sx={{ my: 1.5 }}>
@@ -254,8 +253,8 @@ const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }
                         disabled={isSubmitting || disabled || submitted}
                         onClick={() => handleAnswerClick(option.label)}
                         className="scenario-option-btn"
-                        size="medium" // Slightly larger buttons for scenarios
-                        sx={{ mb: 1 }} // Margin bottom for spacing
+                        size="medium"
+                        sx={{ mb: 1 }}
                     >
                         {option.label}
                     </Button>
@@ -265,8 +264,8 @@ const ScenarioQuestion = ({ scenario, onAnswer, isSubmitting, disabled = false }
     );
 };
 
+// --- Roleplay Component ---
 const RoleplayDialog = ({ roleplay, disabled = false }) => {
-    // Improved data validation
     if (!roleplay || !Array.isArray(roleplay.dialogue)) {
         console.error("RoleplayDialog received invalid data:", roleplay);
         return <Alert severity="warning">Rolllspelsdata saknas eller är ogiltig.</Alert>;
@@ -290,7 +289,7 @@ const RoleplayDialog = ({ roleplay, disabled = false }) => {
             </div>
             <div className="dialogue-container">
                 {dialogue.map((entry, index) => {
-                    if (!entry || typeof entry.role !== 'string' || typeof entry.message !== 'string') return null; // Skip invalid entries
+                    if (!entry || typeof entry.role !== 'string' || typeof entry.message !== 'string') return null;
                     const { bgcolor, initials } = getAvatarStyle(entry.role);
                     const isUser = entry.role.toLowerCase().includes('(du)');
                     return (
@@ -319,23 +318,21 @@ const RoleplayDialog = ({ roleplay, disabled = false }) => {
     );
 };
 
+// --- Feedback Component ---
 const FeedbackComponent = ({ feedback, disabled = false }) => {
-     // Improved data validation
      if (!feedback || typeof feedback.message !== 'string') {
         console.error("FeedbackComponent received invalid data:", feedback);
         return <Alert severity="warning">Feedbackdata saknas eller är ogiltig.</Alert>;
     }
     const feedbackStyles = {
-        "knowledge": { severity: "info", icon: "💡", title: "Kunskapstips" }, // Changed icon
+        "knowledge": { severity: "info", icon: "💡", title: "Kunskapstips" },
         "procedure": { severity: "info", icon: "📋", title: "Procedurinfo" },
         "priority": { severity: "warning", icon: "⚖️", title: "Prioritering" },
         "safety": { severity: "error", icon: "⚠️", title: "Säkerhetsinfo" },
-        // Add a default/fallback style
         "default": { severity: "info", icon: "ℹ️", title: "Feedback" }
     };
     const style = feedbackStyles[feedback.type] || feedbackStyles.default;
 
-    // Using a simple div structure instead of Alert for cleaner look
     return (
          <div className={`feedback-container feedback-${style.severity} ${disabled ? 'disabled-interactive' : ''}`}>
              <div className="feedback-icon">{style.icon}</div>
@@ -358,8 +355,7 @@ const FeedbackComponent = ({ feedback, disabled = false }) => {
     );
 };
 
-// Suggestions/Binary Questions - Can be simplified or kept depending on preference
-// Using the previous structure but ensuring it's wrapped correctly
+// --- Suggestions Component ---
 const SuggestionsComponent = ({ suggestionsData, onAnswer, isSubmitting, disabled = false }) => {
      if (!suggestionsData || !Array.isArray(suggestionsData.options)) {
         console.error("SuggestionsComponent received invalid data:", suggestionsData);
@@ -367,7 +363,6 @@ const SuggestionsComponent = ({ suggestionsData, onAnswer, isSubmitting, disable
     }
     const { text, options } = suggestionsData;
 
-    // Check for binary pattern (optional, could just always render buttons)
     const isBinary = options.length === 2 && options.every(s => typeof (s.label || s.value) === 'string' && /(ja|nej|sant|falskt|true|false|fortsätt|förklara)/i.test(s.label || s.value));
 
     return (
@@ -379,8 +374,9 @@ const SuggestionsComponent = ({ suggestionsData, onAnswer, isSubmitting, disable
                         key={sugg.value || idx}
                         className="suggestion-button"
                         variant="contained"
-                        color={isBinary && idx === 0 ? "primary" : "secondary"}
-                        onClick={() => onAnswer(sugg.value || sugg.label)} // Send value if available, else label
+                        // Slightly different styling for binary options if desired
+                        color={isBinary ? (idx === 0 ? "primary" : "secondary") : "primary"}
+                        onClick={() => onAnswer(sugg.value || sugg.label)}
                         disabled={isSubmitting || disabled}
                         size="small"
                     >
@@ -392,19 +388,182 @@ const SuggestionsComponent = ({ suggestionsData, onAnswer, isSubmitting, disable
     );
 };
 
+// --- Smooth Text Display (Needed Component!) ---
+const SmoothTextDisplay = ({ text, onComplete, scrollToBottom, setTextCompletion }) => {
+  const [paragraphs, setParagraphs] = useState([]);
+  const [visibleParagraphs, setVisibleParagraphs] = useState(0);
+  const timeoutRef = useRef(null);
+  const prevTextRef = useRef('');
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+      isMountedRef.current = true;
+      return () => {
+        isMountedRef.current = false;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      };
+  }, []);
+
+  useEffect(() => {
+    if (!text || typeof text !== 'string' || text === prevTextRef.current) return;
+    prevTextRef.current = text;
+
+    const rawText = text.replace(/\r\n/g, '\n');
+    const majorBlocks = rawText.split(/\n{2,}/);
+    const processedParagraphs = [];
+
+    majorBlocks.forEach(block => {
+      const trimmedBlock = block.trim();
+      if (!trimmedBlock) return;
+      if (trimmedBlock.includes('\n')) {
+        const lines = trimmedBlock.split('\n');
+        let currentItem = '';
+        lines.forEach((line, index) => {
+          const trimmedLine = line.trim();
+          if (/^[\s]*[-*+]\s+/.test(trimmedLine) || /^[\s]*\d+\.\s+/.test(trimmedLine)) {
+            if (currentItem) processedParagraphs.push(currentItem);
+            currentItem = trimmedLine;
+          } else if (currentItem) {
+             currentItem += '\n' + trimmedLine;
+          } else {
+              if(trimmedLine) processedParagraphs.push(trimmedLine);
+              currentItem = '';
+          }
+           if (index === lines.length - 1 && currentItem) {
+               processedParagraphs.push(currentItem);
+           }
+        });
+      } else {
+          processedParagraphs.push(trimmedBlock);
+      }
+    });
+
+    setParagraphs(processedParagraphs);
+    setVisibleParagraphs(0);
+    // Initialize completion state if setter is provided
+    // if (setTextCompletion) setTextCompletion(0); // We now set this via the callback in main component
+
+  }, [text]); // Removed setTextCompletion from dependencies here
+
+  useEffect(() => {
+    if (!isMountedRef.current) return;
+
+    if (visibleParagraphs < paragraphs.length) {
+      // No automatic scroll here anymore
+      const currentPara = paragraphs[visibleParagraphs] || '';
+      let delay = 150; // Base delay
+      const wordCount = currentPara.split(/\s+/).length;
+      if (/^[\s]*[-*+]\s+/.test(currentPara) || /^[\s]*\d+\.\s+/.test(currentPara)) delay = 200;
+      else if (/\?$/.test(currentPara)) delay = 180;
+      else if (currentPara.length < 40) delay = 100;
+      else delay += Math.min(wordCount / 15, 3) * 80;
+      delay = Math.max(50, delay);
+
+      // Don't update external completion state here directly
+      // const newProgress = (visibleParagraphs + 1) / paragraphs.length;
+      // if (setTextCompletion) setTextCompletion(newProgress);
+
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+      timeoutRef.current = setTimeout(() => {
+         if (isMountedRef.current) {
+            setVisibleParagraphs(prev => prev + 1);
+         }
+      }, delay);
+
+    } else if (paragraphs.length > 0 && visibleParagraphs === paragraphs.length) {
+        // Completion logic moved to the callback in the main component
+        // if (setTextCompletion) setTextCompletion(1);
+        if (onComplete) onComplete(); // Call completion callback when done
+    }
+
+    // Cleanup timer on unmount or when dependencies change
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+
+    // Trigger completion callback only when paragraphs/visibleParagraphs change
+  }, [visibleParagraphs, paragraphs, onComplete]);
+
+   const skipAnimation = useCallback(() => {
+    if (!isMountedRef.current) return;
+    if (visibleParagraphs < paragraphs.length) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setVisibleParagraphs(paragraphs.length); // Show all immediately
+      // Trigger completion callback *after* state updates have likely rendered
+      requestAnimationFrame(() => {
+          if (onComplete) onComplete();
+      });
+    }
+  }, [visibleParagraphs, paragraphs, onComplete]);
+
+  return (
+    <div className="smooth-text" onClick={skipAnimation} style={{ cursor: visibleParagraphs < paragraphs.length ? 'pointer' : 'auto' }}>
+      {paragraphs.slice(0, visibleParagraphs).map((para, index) => (
+        <div key={index} className="animate-in-paragraph">
+          {typeof para === 'string' ? <ReactMarkdown className="markdown-content">{para}</ReactMarkdown> : null}
+        </div>
+      ))}
+      {visibleParagraphs < paragraphs.length && (
+        <span className="typing-cursor"></span>
+      )}
+    </div>
+  );
+};
+
+// --- Quick Response Buttons (Needed Component!) ---
+const QuickResponseButtons = ({ onSendQuickResponse, disabled }) => {
+  const [activeIndex, setActiveIndex] = useState(null);
+  const quickResponses = [
+    { text: "Berätta mer om detta", icon: "🔍" },
+    { text: "Jag förstår inte", icon: "❓" },
+    { text: "Fortsätt", icon: "➡️" }
+  ];
+
+  const handleClick = (text, index) => {
+    if (disabled) return;
+    setActiveIndex(index);
+    // Short delay for visual feedback before sending
+    setTimeout(() => {
+      setActiveIndex(null);
+      onSendQuickResponse(text);
+    }, 150);
+  };
+
+  return (
+    <div className="quick-response-container">
+      {quickResponses.map((response, index) => (
+        <Chip
+          key={index}
+          label={response.text}
+          icon={<span className="quick-response-icon">{response.icon}</span>}
+          onClick={() => handleClick(response.text, index)}
+          disabled={disabled}
+          className={`quick-response-chip ${activeIndex === index ? 'quick-response-active' : ''}`}
+          variant="outlined"
+          color="primary" // Or default? Adjust styling in CSS
+          sx={{ cursor: disabled ? 'default' : 'pointer' }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// ========================================================================== //
+// ======================== HELPER COMPONENTS END ========================= //
+// ========================================================================== //
+
 
 // --- Main Chat Component ---
 
 const ChatComponent = () => {
   const [messages, setMessages] = useState([]);
   const [userInput, setUserInput] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false); // Tracks user submission -> AI response cycle
-  const [aiIsThinking, setAiIsThinking] = useState(false); // Tracks if AI is currently generating response
-  const [latestMessageId, setLatestMessageId] = useState(null); // ID of the latest AI message to enable interaction
-  const [isLatestTextComplete, setIsLatestTextComplete] = useState(true); // Tracks if the latest AI text animation is done
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [aiIsThinking, setAiIsThinking] = useState(false);
+  const [latestMessageId, setLatestMessageId] = useState(null);
+  const [isLatestTextComplete, setIsLatestTextComplete] = useState(true); // Start as true (no animation initially)
 
-  const messagesEndRef = useRef(null); // Ref to scroll to
-  const latestMessageRef = useRef(null); // Ref to the latest AI message element
+  const messagesEndRef = useRef(null);
+  const latestMessageRef = useRef(null);
   const navigate = useNavigate();
   const chatContainerRef = useRef(null);
   const startChatCalledRef = useRef(false);
@@ -433,62 +592,63 @@ const ChatComponent = () => {
     return () => window.removeEventListener('resize', setVhProperty);
   }, []);
 
-  // Unique ID generation
   const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-  // *** Revised Scrolling Logic ***
+  // Scroll to start of the latest AI message
   useEffect(() => {
-    // Scroll to the START of the latest AI message when it's added
     if (latestMessageRef.current) {
-      latestMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else if (messagesEndRef.current) {
-        // Fallback: scroll to the very bottom if no specific message ref (e.g., after user message)
-         messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      // Delay slightly to allow DOM update after message state change
+      requestAnimationFrame(() => {
+          setTimeout(() => {
+              latestMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 50); // Short delay might be needed
+      });
     }
-  }, [latestMessageId]); // Trigger scroll when the latest AI message ID changes
+  }, [latestMessageId]); // Trigger only when the *ID* of the latest message changes
+
+   // Scroll to bottom after user message
+   useEffect(() => {
+    // This effect targets the absolute bottom, useful after sending a user message
+    if (messages.length > 0 && messages[messages.length - 1].sender === 'user') {
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 50);
+        });
+    }
+  }, [messages]); // Trigger whenever messages array changes
+
 
   // Callback for SmoothTextDisplay completion
-   const handleTextAnimationComplete = useCallback(() => {
+  const handleTextAnimationComplete = useCallback(() => {
+    console.log("Text animation complete for message:", latestMessageId);
     setIsLatestTextComplete(true);
-    // No automatic scroll here anymore
-  }, []);
+  }, [latestMessageId]); // Dependency ensures it refers to the correct message ID context
 
   // Start chat function
   const startChat = useCallback(async () => {
     if (startChatCalledRef.current || messages.length > 0) return;
     startChatCalledRef.current = true;
 
-    console.log("Starting chat...");
     setAiIsThinking(true);
-    setIsLatestTextComplete(false); // Expecting new text
+    setIsLatestTextComplete(false); // New message is coming
 
     try {
       const response = await axios.post(API_ENDPOINTS.CHAT, {
-        answers: { underskoterska, delegering },
-        message: "start",
-        name: userName
+        answers: { underskoterska, delegering }, message: "start", name: userName
       });
 
       const { textContent, interactiveElement } = response.data.reply;
       const msgId = generateId();
-      setLatestMessageId(msgId); // Set this as the latest message
 
-      setMessages([{
-        id: msgId,
-        sender: 'assistant',
-        textContent: textContent || "",
-        interactiveElement: interactiveElement
-      }]);
+      setMessages([{ id: msgId, sender: 'assistant', textContent: textContent || "", interactiveElement: interactiveElement }]);
+      setLatestMessageId(msgId); // Set ID *after* adding the message
+       // setIsLatestTextComplete remains false until animation finishes
     } catch (error) {
       console.error("Fel vid start av chatt:", error);
       const errorMsgId = generateId();
-      setMessages([{
-        id: errorMsgId,
-        sender: 'assistant',
-        textContent: 'Kunde inte starta chatten. Ladda om sidan.',
-        interactiveElement: null
-      }]);
-      setIsLatestTextComplete(true); // Error message is instantly complete
+      setMessages([{ id: errorMsgId, sender: 'assistant', textContent: 'Kunde inte starta chatten.', interactiveElement: null }]);
+      setIsLatestTextComplete(true); // Error shown instantly
       setLatestMessageId(errorMsgId);
     } finally {
       setAiIsThinking(false);
@@ -507,63 +667,43 @@ const ChatComponent = () => {
     if (!trimmedText || isSubmitting || aiIsThinking) return;
 
     const newUserMessageId = generateId();
-    const newUserMessage = {
-      id: newUserMessageId, sender: 'user', textContent: trimmedText, interactiveElement: null
-    };
+    const newUserMessage = { id: newUserMessageId, sender: 'user', textContent: trimmedText, interactiveElement: null };
 
-    // Add user message, clear input, set loading states
     setMessages(prev => [...prev, newUserMessage]);
     setUserInput('');
-    setIsSubmitting(true); // Block input field
-    setAiIsThinking(true); // Show thinking indicator
-    setIsLatestTextComplete(false); // New AI message incoming, text not complete yet
-    const previousLatestId = latestMessageId; // Get the ID of the message that *was* latest
-    setLatestMessageId(null); // Deactivate interactions on the previous message *immediately*
+    setIsSubmitting(true);
+    setAiIsThinking(true);
+    setIsLatestTextComplete(false); // Expecting new AI text
+    // Deactivate previous message's interactions *before* making the request
+    const previousLatestId = latestMessageId;
+    setLatestMessageId(null);
 
-    // Scroll to bottom after user message is added
-    requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+    // No automatic scroll here, handled by useEffect reacting to messages change
 
     try {
-      const response = await axios.post(API_ENDPOINTS.CHAT, {
-        // No need to send answers every time, backend gets it from session
-        message: trimmedText,
-        name: userName // Keep name for potential personalization in response
-      });
+      const response = await axios.post(API_ENDPOINTS.CHAT, { message: trimmedText, name: userName });
 
       if (response?.data?.reply) {
         const { textContent, interactiveElement } = response.data.reply;
         const newMessageId = generateId();
 
-        setMessages(prev => {
-           // Disable interaction on the previous message explicitly if needed (optional)
-           // const updatedPrev = prev.map(msg => msg.id === previousLatestId ? { ...msg, active: false } : msg);
-           return [...prev, { // Use prev instead of updatedPrev if not modifying old messages
-             id: newMessageId,
-             sender: 'assistant',
-             textContent: textContent || "",
-             interactiveElement: interactiveElement
-           }];
-        });
-        setLatestMessageId(newMessageId); // Set the *new* message as the latest/active one
-        // isLatestTextComplete is still false, will be set by SmoothTextDisplay via callback
-      } else {
-        throw new Error("Invalid API response structure");
-      }
+        setMessages(prev => [...prev, {
+            id: newMessageId, sender: 'assistant',
+            textContent: textContent || "", interactiveElement: interactiveElement
+        }]);
+        // Set the new latest ID *after* the message is added to the state
+        setLatestMessageId(newMessageId);
+        // isLatestTextComplete remains false until animation callback
+      } else { throw new Error("Invalid API response"); }
     } catch (error) {
       console.error("Fel vid API-anrop:", error);
       const errorMsgId = generateId();
-      setMessages(prev => [...prev, {
-        id: errorMsgId, sender: 'assistant',
-        textContent: 'Ett fel uppstod. Försök igen.', interactiveElement: null
-      }]);
-      setIsLatestTextComplete(true); // Error message is instantly complete
-      setLatestMessageId(errorMsgId); // Make the error message the 'latest'
+      setMessages(prev => [...prev, { id: errorMsgId, sender: 'assistant', textContent: 'Ett fel uppstod.', interactiveElement: null }]);
+      setIsLatestTextComplete(true); // Error message is instant
+      setLatestMessageId(errorMsgId);
     } finally {
-      // Only allow new input *after* AI is done thinking
       setAiIsThinking(false);
-       // Keep isSubmitting true until text animation is ALSO complete? Optional.
-       // For now, allow input as soon as AI is done thinking:
-       setIsSubmitting(false);
+      setIsSubmitting(false); // Allow input again
     }
   };
 
@@ -585,94 +725,64 @@ const ChatComponent = () => {
   };
 
   // --- Rendering Logic ---
-  const renderAIMessage = (message, index) => {
+  const renderAIMessage = (message) => {
     const isLatest = message.id === latestMessageId;
     const { textContent, interactiveElement } = message;
-
-    // Assign ref to the latest message element for scrolling
-    const messageRef = isLatest ? latestMessageRef : null;
+    const messageRef = isLatest ? latestMessageRef : null; // Assign ref if it's the latest
 
     let interactiveComponent = null;
-    let interactiveType = null;
     if (interactiveElement?.type && interactiveElement?.data) {
-        interactiveType = interactiveElement.type;
-        const data = interactiveElement.data[interactiveType] || interactiveElement.data; // Handle nested or direct data
+        const interactiveType = interactiveElement.type;
+        // Get data, handling potential nesting (e.g., data.suggestions vs data)
+        const data = interactiveElement.data[interactiveType] || interactiveElement.data;
         const commonProps = {
             key: `${message.id}-${interactiveType}`,
-            onAnswer: handleSuggestionClick,
-            isSubmitting: isSubmitting || aiIsThinking, // Disable if submitting OR thinking
-            disabled: !isLatest, // Disable if not the absolutely latest message
+            onAnswer: handleSuggestionClick, // Pass handler
+            isSubmitting: isSubmitting || aiIsThinking,
+            disabled: !isLatest, // Only latest is enabled
         };
 
       try {
           switch (interactiveType) {
-              case 'scenario':
-                  if (data && data.options) { // Check essential props
-                    interactiveComponent = <ScenarioQuestion scenario={data} {...commonProps} />;
-                  } else { console.error("Invalid Scenario data:", data); }
-                  break;
-              case 'multipleChoice':
-                   if (data && data.options) {
-                    interactiveComponent = <MultipleChoiceQuestion question={data} {...commonProps} />;
-                   } else { console.error("Invalid MultipleChoice data:", data); }
-                  break;
-              case 'matching':
-                   if (data && data.items && data.matches) {
-                    interactiveComponent = <MatchingQuestion question={data} {...commonProps} />;
-                   } else { console.error("Invalid Matching data:", data); }
-                  break;
-              case 'ordering':
-                  if (data && data.items) {
-                    interactiveComponent = <OrderingQuestion question={data} {...commonProps} />;
-                  } else { console.error("Invalid Ordering data:", data); }
-                  break;
-              case 'roleplay':
-                   if (data && data.dialogue) {
-                    interactiveComponent = <RoleplayDialog roleplay={data} disabled={!isLatest} />;
-                   } else { console.error("Invalid Roleplay data:", data); }
-                  break;
-              case 'feedback':
-                   if (data && data.message) {
-                    interactiveComponent = <FeedbackComponent feedback={data} disabled={!isLatest} />;
-                   } else { console.error("Invalid Feedback data:", data); }
-                  break;
-              case 'suggestions':
-                  if (data && data.options) {
-                    interactiveComponent = <SuggestionsComponent suggestionsData={data} {...commonProps} />;
-                  } else { console.error("Invalid Suggestions data:", data); }
-                  break;
-              default:
-                  console.warn(`Unknown interactive element type: ${interactiveType}`);
+               case 'scenario':       interactiveComponent = data?.options ? <ScenarioQuestion scenario={data} {...commonProps} /> : null; break;
+               case 'multipleChoice': interactiveComponent = data?.options ? <MultipleChoiceQuestion question={data} {...commonProps} /> : null; break;
+               case 'matching':       interactiveComponent = data?.items && data.matches ? <MatchingQuestion question={data} {...commonProps} /> : null; break;
+               case 'ordering':       interactiveComponent = data?.items ? <OrderingQuestion question={data} {...commonProps} /> : null; break;
+               case 'roleplay':       interactiveComponent = data?.dialogue ? <RoleplayDialog roleplay={data} disabled={!isLatest} /> : null; break;
+               case 'feedback':       interactiveComponent = data?.message ? <FeedbackComponent feedback={data} disabled={!isLatest} /> : null; break;
+               case 'suggestions':    interactiveComponent = data?.options ? <SuggestionsComponent suggestionsData={data} {...commonProps} /> : null; break;
+              default: console.warn(`Unknown type: ${interactiveType}`);
+          }
+          if (!interactiveComponent && interactiveElement?.type) { // Log if component is null after switch
+              console.error(`Failed to render interactive component for type ${interactiveType}. Data:`, data);
+              interactiveComponent = <Alert severity="warning">Kunde inte visa interaktivt innehåll.</Alert>;
           }
         } catch (renderError) {
-             console.error(`Error rendering interactive component type ${interactiveType}:`, renderError, "Data:", data);
-              interactiveComponent = <Alert severity="error">Kunde inte visa interaktivt element.</Alert>;
+            console.error(`Error rendering component ${interactiveType}:`, renderError, "Data:", data);
+            interactiveComponent = <Alert severity="error">Internt fel vid rendering.</Alert>;
         }
     }
 
-    // Determine visibility of interactive part
-    const showInteractive = isLatest ? isLatestTextComplete : true; // Show immediately if not latest, else wait for text
+    // Show interactive part only for the latest message AND after its text is complete
+    const showInteractive = isLatest ? isLatestTextComplete : true; // Old messages always show their (disabled) interactive part
 
     return (
       <Box ref={messageRef} key={message.id} className={`chat-message assistant ${isLatest ? 'active-message' : ''}`}>
-         {/* Text Content */}
+         {/* Text Content - Animate only if latest */}
          {typeof textContent === 'string' && textContent.length > 0 && (
            isLatest ? (
              <SmoothTextDisplay
                text={textContent}
-               onComplete={handleTextAnimationComplete} // Use the new callback
-               // Pass a dummy scrollToBottom or remove if not needed by SmoothTextDisplay internally
+               onComplete={handleTextAnimationComplete}
+               // Dummy scroll function, actual scroll handled by useEffect
                scrollToBottom={() => {}}
-               // Pass completion state setter if SmoothTextDisplay uses it directly (optional)
-               // setTextCompletion={isLatest ? setIsLatestTextComplete : undefined} // Or manage completion purely via callback
              />
            ) : (
-             // Render previously completed messages directly
              <ReactMarkdown className="markdown-content">{textContent}</ReactMarkdown>
            )
          )}
 
-         {/* Interactive Content Wrapper (Rendered but visibility controlled by CSS) */}
+         {/* Interactive Content Wrapper */}
          {interactiveComponent && (
            <div className={`interactive-content-wrapper ${showInteractive ? 'visible' : 'hidden'} ${!isLatest ? 'disabled-interactive' : ''}`}>
              {interactiveComponent}
@@ -685,7 +795,6 @@ const ChatComponent = () => {
 
   return (
     <div className="chat-container" ref={chatContainerRef}>
-      {/* Header */}
       <div className="chat-header">
         <h1>Delegeringsutbildning</h1>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -693,14 +802,13 @@ const ChatComponent = () => {
         </Typography>
       </div>
 
-      {/* Messages Area */}
-      <div className="chat-messages"> {/* Removed ref here, use messagesEndRef */}
-        {messages.map((msg, index) => {
+      <div className="chat-messages">
+        {messages.map((msg) => {
           if (msg.sender === 'assistant') {
-             if (typeof msg.textContent !== 'string') return null; // Skip invalid
-            return renderAIMessage(msg, index);
+             if (typeof msg.textContent !== 'string') return null;
+            return renderAIMessage(msg);
           } else if (msg.sender === 'user') {
-             if (typeof msg.textContent !== 'string') return null; // Skip invalid
+             if (typeof msg.textContent !== 'string') return null;
             return (
               <Box key={msg.id} className="chat-message user">
                 <ReactMarkdown className="markdown-content">{msg.textContent}</ReactMarkdown>
@@ -709,50 +817,43 @@ const ChatComponent = () => {
           }
           return null;
         })}
-
-        {/* AI Thinking Indicator */}
         {aiIsThinking && (
           <div className="ai-thinking">
             <div className="ai-thinking-dots"><span></span><span></span><span></span></div>
-             <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5 }}>Lexi tänker...</Typography>
           </div>
         )}
-        {/* Invisible element at the end for fallback scrolling */}
-         <div ref={messagesEndRef} />
+         <div ref={messagesEndRef} style={{ height: '1px' }} /> {/* Scroll target */}
       </div>
 
-      {/* Quick Response Buttons Area - positioned above input */}
-       <div className="quick-responses-area">
+      <div className="quick-responses-area">
         <QuickResponseButtons
           onSendQuickResponse={handleQuickResponse}
           disabled={isSubmitting || aiIsThinking}
         />
       </div>
 
-
-      {/* Input Area */}
       <div className="input-area">
         <TextField
           fullWidth
           variant="outlined"
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          placeholder="Skriv ditt meddelande eller välj ett alternativ..."
+          placeholder="Skriv ditt meddelande..."
           onKeyDown={handleKeyDown}
           disabled={isSubmitting || aiIsThinking}
           multiline
-          minRows={1} // Start smaller
+          minRows={1}
           maxRows={4}
-          sx={{ '& .MuiOutlinedInput-root': { borderRadius: '20px', backgroundColor: '#fff' } }} // Rounded input
+           sx={{ '& .MuiOutlinedInput-root': { borderRadius: '20px', backgroundColor: '#fff', paddingRight: '50px' } }} // Padding for button overlap
         />
         <Button
           variant="contained"
           color="primary"
-          onClick={() => sendMessage(userInput)} // Ensure it calls sendMessage
+          onClick={() => sendMessage(userInput)}
           disabled={isSubmitting || !userInput.trim() || aiIsThinking}
-          sx={{ borderRadius: '50%', minWidth: '50px', height: '50px', ml: 1 }} // Round button
+           sx={{ borderRadius: '50%', minWidth: '46px', height: '46px', padding: 0, position: 'absolute', right: '18px', bottom: '18px' }} // Position button inside textfield
         >
-          {isSubmitting || aiIsThinking ? <CircularProgress size={24} color="inherit" /> : "➤"} {/* Send icon */}
+          {isSubmitting || aiIsThinking ? <CircularProgress size={24} color="inherit" /> : <span style={{fontSize: '1.5rem'}}>➤</span>}
         </Button>
       </div>
     </div>
