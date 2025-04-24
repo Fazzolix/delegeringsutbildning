@@ -8,7 +8,7 @@ import sqlite3
 from ai import ai_bp
 from dotenv import load_dotenv
 import logging
-from urllib.parse import urlparse # Importera urlparse för att extrahera domän
+from urllib.parse import urlparse
 
 # Konfigurera loggning
 logging.basicConfig(level=logging.INFO,
@@ -25,12 +25,9 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__, static_folder=os.path.join(basedir, 'static'))
 
 # --- Flask-Session Configuration ---
-# VIKTIGT: Säkerställ att SECRET_KEY är satt i Render Environment!
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 if not app.config['SECRET_KEY']:
     logger.error("FATAL: SECRET_KEY environment variable is not set!")
-    # I en riktig produktionsmiljö bör appen inte starta utan SECRET_KEY.
-    # Sätt ett osäkert fallback ENDAST för att undvika krasch under felsökning om den saknas.
     app.config['SECRET_KEY'] = 'unsafe-dev-key-replace-me-immediately'
     logger.warning("!!! Using UNSAFE fallback SECRET_KEY. Set a proper environment variable! !!!")
 
@@ -42,7 +39,7 @@ if not redis_url:
 else:
     try:
         redis_client = redis.from_url(redis_url, decode_responses=False)
-        redis_client.ping() # Verifiera anslutning vid start
+        redis_client.ping()
         app.config['SESSION_REDIS'] = redis_client
         logger.info(f"Successfully connected to Redis at {redis_url.split('@')[-1]}")
     except redis.exceptions.ConnectionError as e:
@@ -52,53 +49,32 @@ else:
         logger.error(f"Error creating Redis client: {e}")
         app.config['SESSION_REDIS'] = None
 
-# *** Explicit Cookie-konfiguration (med SameSite='None') ***
-app.config['SESSION_COOKIE_SECURE'] = True # Krävs för SameSite='None' och HTTPS
+# *** Explicit Cookie-konfiguration (med manuellt satt domän) ***
+app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'None' # Tillåter cross-site cookies (kräver Secure=True)
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_PATH'] = '/'
 
-# --- DEBUG Logging för URL:er och Domänlogik ---
+# --- Manuell inställning av Cookie Domain ---
+# Eftersom både frontend och backend är på *.onrender.com, sätter vi domänen manuellt.
+# Kontrollera om vi verkar köra på Render baserat på URL:erna
 frontend_url_str = os.getenv('FRONTEND_URL', '')
 backend_url_str = os.getenv('BACKEND_URL', '')
-logger.info(f"DEBUG_URL: Read FRONTEND_URL from env: '{frontend_url_str}'")
-logger.info(f"DEBUG_URL: Read BACKEND_URL from env: '{backend_url_str}'")
-# -------------------------------------------
+# Enkel kontroll om båda URL:erna innehåller onrender.com
+IS_ON_RENDER = "onrender.com" in frontend_url_str and "onrender.com" in backend_url_str
 
-# Försök att sätta en gemensam toppdomän för cookien
-try:
-    if not frontend_url_str or not backend_url_str:
-         logger.warning("DEBUG_URL: FRONTEND_URL or BACKEND_URL is empty. Cannot attempt to set SESSION_COOKIE_DOMAIN.")
-         raise ValueError("URL missing")
+if IS_ON_RENDER:
+    # VIKTIGT: Sätt med ledande punkt för att täcka alla subdomäner
+    app.config['SESSION_COOKIE_DOMAIN'] = ".onrender.com"
+    logger.info(f"Manually setting SESSION_COOKIE_DOMAIN to: .onrender.com")
+else:
+    # Om vi inte är på Render (t.ex. localhost), sätt inte domänen alls (None)
+    # så binds den till localhost/127.0.0.1, vilket är korrekt där.
+    app.config['SESSION_COOKIE_DOMAIN'] = None
+    logger.info("Not running on Render (based on URLs), setting SESSION_COOKIE_DOMAIN to None.")
+# ---------------------------------------
 
-    frontend_parsed = urlparse(frontend_url_str)
-    backend_parsed = urlparse(backend_url_str)
-
-    if not frontend_parsed.netloc or not backend_parsed.netloc:
-        logger.warning(f"DEBUG_URL: Could not extract domain/netloc from URLs: Frontend='{frontend_parsed.netloc}', Backend='{backend_parsed.netloc}'. Cannot set SESSION_COOKIE_DOMAIN.")
-        raise ValueError("netloc missing")
-
-    frontend_domain_parts = frontend_parsed.netloc.split('.')
-    backend_domain_parts = backend_parsed.netloc.split('.')
-
-    logger.info(f"DEBUG_URL: Parsed frontend domain parts: {frontend_domain_parts}")
-    logger.info(f"DEBUG_URL: Parsed backend domain parts: {backend_domain_parts}")
-
-    # Jämför de två sista delarna
-    if len(frontend_domain_parts) >= 2 and len(backend_domain_parts) >= 2 and \
-       frontend_domain_parts[-2:] == backend_domain_parts[-2:]:
-        base_domain = "." + ".".join(frontend_domain_parts[-2:]) # Ex: .onrender.com
-        app.config['SESSION_COOKIE_DOMAIN'] = base_domain
-        logger.info(f"Setting SESSION_COOKIE_DOMAIN to: {base_domain}")
-    else:
-        logger.info(f"Frontend ({'.'.join(frontend_domain_parts[-2:])}) and Backend ({'.'.join(backend_domain_parts[-2:])}) TLDs do not match. Not setting SESSION_COOKIE_DOMAIN.")
-
-except Exception as parse_err:
-    logger.warning(f"Could not parse URLs or parts mismatch, proceeding without setting SESSION_COOKIE_DOMAIN. Error: {parse_err}")
-
-
-# Logga slutgiltiga cookie-inställningar innan Session initieras
-# Använder .get() för att säkert hämta värden som kanske inte är satta
+# Logga slutgiltiga cookie-inställningar
 logger.info(
     f"Final cookie settings before Session init: "
     f"Secure={app.config.get('SESSION_COOKIE_SECURE')}, "
@@ -114,7 +90,6 @@ if app.config.get('SESSION_REDIS'):
 else:
     logger.error("Flask-Session could not be initialized with Redis due to connection issues.")
 
-
 # --- CORS Configuration ---
 cors_origins = []
 frontend_url_from_env = os.getenv('FRONTEND_URL')
@@ -122,17 +97,13 @@ if frontend_url_from_env:
     cors_origins.append(frontend_url_from_env)
 else:
     logger.warning("FRONTEND_URL environment variable not set, CORS might not allow frontend requests.")
-# Lägg alltid till localhost för lokal utveckling
-cors_origins.append("http://localhost:3000")
+cors_origins.append("http://localhost:3000") # Tillåt alltid localhost för dev
 
 logger.info(f"Configuring CORS for origins: {cors_origins}")
-
-CORS(app,
-     supports_credentials=True, # Viktigt!
-     origins=cors_origins
-    )
+CORS(app, supports_credentials=True, origins=cors_origins)
 # -------------------------
 
+# ----- Resten av app.py (databaskod, routes, etc.) är oförändrad -----
 
 # Define an absolute path to the database
 db_path = os.path.join(basedir, 'database.db')
@@ -147,7 +118,7 @@ def init_db():
             c = conn.cursor()
             c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)')
             conn.commit()
-        logger.info("Database initialized successfully.")
+        #logger.info("Database initialized successfully.") # Ta bort lite spam
     except sqlite3.Error as e:
         logger.error(f"Database error during initialization: {e}")
 
@@ -157,7 +128,6 @@ init_db()
 @app.route('/static/<path:filename>')
 def serve_static_files(filename):
     static_dir = app.static_folder
-    #logger.info(f"Attempting to serve static file: {filename} from {static_dir}") # Ta bort spam
     try:
         return send_from_directory(static_dir, filename)
     except FileNotFoundError:
@@ -169,7 +139,7 @@ def serve_static_files(filename):
 
 @app.route('/')
 def index():
-    return jsonify({"message": "Backend API running with Redis sessions, SameSite=None, and debug logs."})
+    return jsonify({"message": "Backend API running with Redis sessions, manual domain cookie."})
 
 # API endpoint to save user name
 @app.route('/api/user', methods=['POST'])
@@ -184,7 +154,6 @@ def save_user():
             c = conn.cursor()
             c.execute('INSERT INTO users (name) VALUES (?)', (name,))
             conn.commit()
-        # Sätt ett testvärde i sessionen här för att se om Set-Cookie skickas
         session['user_saved'] = name
         session.modified = True
         logger.info(f"User name saved: {name}. Test session value set.")
