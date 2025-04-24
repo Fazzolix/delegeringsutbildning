@@ -1,21 +1,20 @@
 # backend/ai.py
 """
 Denna modul hanterar AI-integrationen för delegeringsutbildningen.
-Modulen bygger dynamiska prompts baserade på användarens bakgrund,
-hanterar chatthistorik och kommunicerar med Gemini API.
-Denna version flyttar JSON-parsning till backend.
+Använder nu Flask-Session för att hantera chatthistorik mellan requests.
 """
 
 import os
 import json
 import logging
 import hashlib
-from flask import Blueprint, request, jsonify, send_from_directory # Added send_from_directory
+# Importera 'session' från Flask för att hantera sessionsdata
+from flask import Blueprint, request, jsonify, send_from_directory, session
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# Importera den nya parsing-funktionen OCH INTERACTIVE_KEYS
-from parsing_utils import parse_ai_response, INTERACTIVE_KEYS # <-- FIX: Added INTERACTIVE_KEYS here
+# Importera parsing-funktioner och konstanter
+from parsing_utils import parse_ai_response, INTERACTIVE_KEYS
 
 # Ladda miljövariabler
 load_dotenv()
@@ -32,19 +31,15 @@ logger = logging.getLogger(__name__)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
-    print("Error: GEMINI_API_KEY är inte definierat! Kontrollera din .env-fil.")
-# else:
-    # Konfigurera Gemini API - flyttad till där den behövs för att undvika fel vid start om nyckel saknas
-    # genai.configure(api_key=GEMINI_API_KEY)
+    # Överväg att kasta ett fel här för att förhindra start utan nyckel
+    # raise ValueError("GEMINI_API_KEY is not defined in environment.")
 
-# Global dictionary för att lagra chatt-sessioner per användare
-# Sparas som: {user_name: (session, prompt_hash)}
-# OBS: Detta fungerar inte tillförlitligt med flera Gunicorn workers.
-# Se kommentar nedan.
-chat_sessions = {}
+# Ta bort globala chat_sessions dict
+# chat_sessions = {}
 
-# Global promptkonfiguration (behålls för prompt-byggnad)
+# Global promptkonfiguration
 admin_prompt_config = [
+    # ... (resten av din promptkonfiguration förblir oförändrad) ...
     {
         "title": "",
         "content": "Du är en varm och pedagogisk expertlärare specialiserad på **delegering inom kommunal vård och omsorg**. "
@@ -313,17 +308,10 @@ admin_prompt_config = [
     }
 ]
 
-# Define local image assets.
-# Uppdatera URL:erna för att matcha din Render-applikations URL eller en absolut sökväg
-# För Render, använd den publika URL:en. Ex: https://your-backend-app.onrender.com/static/images/image1.png
-BACKEND_BASE_URL = os.getenv('BACKEND_URL', 'http://localhost:10000') # Anpassa port om nödvändigt
-
+# Bildkonfiguration (oförändrad)
+BACKEND_BASE_URL = os.getenv('BACKEND_URL', 'http://localhost:10000')
 image_assets = {
-    "image1": {
-         "url": f"{BACKEND_BASE_URL}/static/images/image1.png",
-         "description": "Denna bild illustrerar SBAR, använd i samband med att du förklarar det"
-    },
-    # Lägg till resten av dina bilder här på samma sätt
+    "image1": {"url": f"{BACKEND_BASE_URL}/static/images/image1.png", "description": "Denna bild illustrerar SBAR, använd i samband med att du förklarar det"},
      "image2": { "url": f"{BACKEND_BASE_URL}/static/images/image2.png", "description": "Beskrivning bild 2"},
      "image3": { "url": f"{BACKEND_BASE_URL}/static/images/image3.png", "description": "Beskrivning bild 3"},
      "image4": { "url": f"{BACKEND_BASE_URL}/static/images/image4.png", "description": "Beskrivning bild 4"},
@@ -339,23 +327,12 @@ image_assets = {
      "image14": { "url": f"{BACKEND_BASE_URL}/static/images/image14.png", "description": "Beskrivning bild 14"},
 }
 
-
+# Funktioner för att bygga prompt etc. (oförändrade)
 def get_prompt_hash():
-    """Returnerar ett hashvärde för den aktuella admin_prompt_config."""
     prompt_json = json.dumps(admin_prompt_config, sort_keys=True)
     return hashlib.md5(prompt_json.encode('utf-8')).hexdigest()
 
-
 def build_background(user_answers):
-    """
-    Bygger dynamisk bakgrund baserat på användarens svar.
-
-    Args:
-        user_answers: Användarens svar på bakgrundsfrågor
-
-    Returns:
-        En formaterad textsträng med anpassad bakgrundsinformation
-    """
     text = "Anpassa utbildningen baserat på följande:\n"
     if user_answers.get('underskoterska', 'nej') == 'ja':
         text += "- Du är utbildad undersköterska – använd relevanta exempel och anpassa språket därefter.\n"
@@ -367,16 +344,8 @@ def build_background(user_answers):
         text += "- Du är ny inom delegering; vi går igenom grunderna noggrant.\n"
     return text + "\n"
 
-
 def load_education_plan():
-    """
-    Läser in utbildningsplanen från en extern fil.
-
-    Returns:
-        Innehållet i utbildningsplanen som textsträng
-    """
     try:
-        # Ensure the path is correct relative to the execution directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(base_dir, "education_plan.txt")
         with open(file_path, "r", encoding="utf-8") as f:
@@ -385,60 +354,32 @@ def load_education_plan():
         logger.error(f"Kunde inte läsa utbildningsplanen från {file_path}: {e}")
         return "Utbildningsplan saknas eller kunde inte laddas."
 
-
 def build_system_instruction(user_answers):
-    """
-    Bygger systeminstruktionen genom att kombinera adminkonfigurerade sektioner
-    med dynamisk bakgrund, utbildningsplan och lokala bildresurser.
-
-    Args:
-        user_answers: Användarens svar på bakgrundsfrågor
-
-    Returns:
-        En komplett systeminstruktion för AI-modellen
-    """
     background_text = build_background(user_answers)
     education_plan_text = load_education_plan()
     instruction_parts = []
-
     for section in admin_prompt_config:
         content = section["content"]
         if "{background}" in content:
             content = content.replace("{background}", background_text)
         if "{education_plan}" in content:
             content = content.replace("{education_plan}", education_plan_text)
-        # Ersätt bildplatshållare med faktiska lokala bildlänkar i markdown-format
         for key, asset in image_assets.items():
             placeholder = "{" + key + "}"
-            # Create markdown image link: ![Alt text](URL)
             replacement = f"![{asset['description']}]({asset['url']})"
             content = content.replace(placeholder, replacement)
-
         if section["title"]:
-            instruction_parts.append(f"**{section['title']}**\n{content}") # Added newline for better separation
+            instruction_parts.append(f"**{section['title']}**\n{content}")
         else:
             instruction_parts.append(content)
-
-    system_instruction = "\n\n".join(instruction_parts) # Use double newline for better section separation
-
+    system_instruction = "\n\n".join(instruction_parts)
     return system_instruction
 
-
+# Funktion för att bygga initial historik (oförändrad)
 def build_initial_history(user_answers, user_message, user_name):
-    """
-    Bygger initial historik med en välkomsttext anpassad utifrån användarens bakgrund.
-
-    Args:
-        user_answers: Användarens svar på bakgrundsfrågor
-        user_message: Användarens första meddelande
-        user_name: Användarens namn
-
-    Returns:
-        En tuple: (greeting_text: str, history_for_session: list)
-    """
     greeting = f"Välkommen {user_name} till delegeringsutbildningen!\n"
     greeting += "Jag är din lärare, du kan kalla mig Lexi. I denna utbildningen fokuserar vi på **läkemedelstilldelning via delegering**, för dig som jobbar i Skövde kommun.\n\n"
-
+    # ... (resten av greeting-logiken är oförändrad) ...
     if user_answers.get('underskoterska', 'nej') == 'ja':
         greeting += (
             "Som undersköterska har du en viktig roll i vård och omsorgs arbetet. Denna utbildning är utformad för att ge dig den kompetens som krävs för säker läkemedelstilldelning via delegering.\n"
@@ -465,34 +406,26 @@ def build_initial_history(user_answers, user_message, user_name):
         "**Målet är att du ska förstå och lära dig grunderna inom bland annat läkemedelstilldelning för att du ska ha en bra grund att stå på inför att du träffar sjuksköterskan.** Nedanför finns en chattruta, den kommer du använda för att interagera med mig, jag kommer bland annat att ge dig information, ställa frågor och så vidare. Detta för att jag ska känna att du förstått. Du kan alltid be mig förklara igen, eller säga att du inte förstår. Vi går igenom det här tillsammans. "
         "Är du redo att börja? Skriv 'fortsätt' när du är redo i chattrutan."
     )
-
-    # Format för Gemini API
-    # Historiken som SPARS för sessionen bör starta med AI:s hälsning.
+    # Historiken innehåller nu bara AI:ns första meddelande.
+    # Användarens 'start'-meddelande behövs inte i historiken för Gemini.
     history_for_session = [{
-        "role": "model", # Korrekt roll för AI:s hälsning i historiken
-        "parts": [{
-            "text": greeting
-        }]
+        "role": "model",
+        "parts": [{"text": greeting}]
     }]
-
     return greeting, history_for_session
 
+# Funktion för att hämta modellen (oförändrad)
 def get_gemini_model(user_answers):
-    """Konfigurerar och returnerar en Gemini-modellinstans."""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY är inte definierat.")
-
     genai.configure(api_key=GEMINI_API_KEY)
     system_instruction_text = build_system_instruction(user_answers)
     model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash', # Using 1.5 flash as recommended
+        model_name='gemini-1.5-flash',
         system_instruction=system_instruction_text,
         generation_config={
-            "temperature": 1,
-            "top_p": 0.95,
-            "top_k": 64, # Adjusted based on common practices for 1.5
-            "max_output_tokens": 8192,
-            "response_mime_type": "text/plain", # Explicitly request text
+            "temperature": 1, "top_p": 0.95, "top_k": 64,
+            "max_output_tokens": 8192, "response_mime_type": "text/plain",
         }
     )
     return model
@@ -500,161 +433,163 @@ def get_gemini_model(user_answers):
 @ai_bp.route('/api/chat', methods=['POST'])
 def chat():
     """
-    Huvudendpoint för chattfunktionen. Hanterar användarmeddelanden och genererar AI-svar.
-    Returnerar nu en strukturerad JSON med separerad text och interaktiva element.
+    Hanterar chattförfrågningar och använder Flask-Session för att lagra historik.
     """
     data = request.get_json()
-    user_answers = data.get('answers', {})
+    user_answers = data.get('answers', {}) # Bakgrundssvar (kan vara tom efter första request)
     user_message = data.get('message', '')
-    user_name = data.get('name', 'Användare')
+    user_name = data.get('name', 'Användare') # Användarnamn (behövs ej för session-nyckel, men för hälsning)
 
     if not user_message:
-         return jsonify({"error": "Message cannot be empty"}), 400
+        return jsonify({"error": "Message cannot be empty"}), 400
 
     try:
         current_hash = get_prompt_hash()
+        chat_session_obj = None # Kommer hålla Gemini ChatSession-objektet
 
-        # --- Session Management ---
-        session = None
-        session_tuple = chat_sessions.get(user_name)
+        # --- Session Management med Flask-Session ---
+        # Hämta sparad kontext från sessionen
+        chat_context = session.get('chat_context')
 
-        # Handle start message or prompt update
-        if user_message.strip().lower() == "start" or not session_tuple or session_tuple[1] != current_hash:
+        # Kontrollera om en session finns och prompt-hashen matchar
+        if chat_context and chat_context.get('hash') == current_hash:
+            logger.info(f"Existing session context found for user.")
+            # Hämta historiken från sessionen
+            retrieved_history = chat_context.get('history', [])
+            if not retrieved_history:
+                 logger.warning("Session context found, but history was empty. Starting fresh.")
+                 chat_context = None # Force recreation
+            else:
+                 # Återskapa Gemini-modellen och starta chatten med den sparade historiken
+                 try:
+                     model = get_gemini_model(user_answers) # Behöver user_answers här om prompten ändrats
+                     chat_session_obj = model.start_chat(history=retrieved_history)
+                     logger.info(f"Recreated chat session from history (length: {len(retrieved_history)}).")
+                 except Exception as model_err:
+                      logger.error(f"Error recreating Gemini model/session from history: {model_err}", exc_info=True)
+                      # Fallback: Skapa en ny session
+                      chat_context = None # Force recreation
+        else:
+            if not chat_context:
+                logger.info("No session context found for user. Creating new one.")
+            else: # Hash mismatch
+                logger.info(f"Prompt hash changed (Session: {chat_context.get('hash')}, Current: {current_hash}). Creating new session.")
+            # Ta bort gammal session om hash inte matchar
+            session.pop('chat_context', None)
+            chat_context = None # Markera för att skapa ny
+
+        # Skapa ny session om ingen giltig hittades/återskapades
+        if chat_context is None:
+            logger.info("Initializing new chat session.")
+            initial_greeting, initial_history = build_initial_history(user_answers, user_message, user_name)
+
+            # Om det första meddelandet är 'start', returnera bara hälsningen
             if user_message.strip().lower() == "start":
-                logger.info(f"Starting new session for {user_name} due to 'start' message.")
-                initial_greeting, history_for_session = build_initial_history(user_answers, user_message, user_name)
-
-                model = get_gemini_model(user_answers)
-                session = model.start_chat(history=history_for_session) # Start with AI's greeting
-                chat_sessions[user_name] = (session, current_hash)
-                logger.info(f"New session created for {user_name} with hash {current_hash}")
-
-                # Parse the initial greeting itself
+                # Spara den initiala kontexten (historik + hash) i sessionen
+                session['chat_context'] = {'history': initial_history, 'hash': current_hash}
+                logger.info("Stored initial history in session for 'start' message.")
+                # Parse greeting for potential interactive elements (osannolikt men säkrast)
                 parsed_greeting = parse_ai_response(initial_greeting)
                 interactive_element = None
-                if parsed_greeting.get("interactiveJson"):
-                    # Determine the type based on keys in the parsed JSON
-                    interactive_type = None
-                    # --- This block now works because INTERACTIVE_KEYS is imported ---
-                    if isinstance(parsed_greeting["interactiveJson"], dict):
-                        for key in parsed_greeting["interactiveJson"]:
-                            if key in INTERACTIVE_KEYS:
-                                interactive_type = INTERACTIVE_KEYS[key]
-                                break
-                    # ------------------------------------------------------------------
-                    if interactive_type:
-                         interactive_element = {
-                            "type": interactive_type,
-                            "data": parsed_greeting["interactiveJson"] # Send the whole object
-                         }
-
+                if parsed_greeting.get("interactiveJson") and isinstance(parsed_greeting["interactiveJson"], dict):
+                    for key in parsed_greeting["interactiveJson"]:
+                        if key in INTERACTIVE_KEYS:
+                            interactive_element = {
+                                "type": INTERACTIVE_KEYS[key],
+                                "data": parsed_greeting["interactiveJson"]
+                            }
+                            break
                 return jsonify({
                     "reply": {
                         "textContent": parsed_greeting["textContent"],
                         "interactiveElement": interactive_element
                     }
                 })
+            else:
+                # Om det *inte* var 'start' men vi ändå skapar nytt (t.ex. pga hashändring),
+                # starta sessionen med initial historik men fortsätt för att behandla nuvarande meddelande
+                try:
+                    model = get_gemini_model(user_answers)
+                    chat_session_obj = model.start_chat(history=initial_history)
+                    # Spara direkt så vi har den för nästa steg
+                    session['chat_context'] = {'history': initial_history, 'hash': current_hash}
+                    session.modified = True # Markera sessionen som ändrad
+                    logger.info("Stored initial history for new session (non-start message).")
+                except Exception as model_err:
+                     logger.error(f"Error starting initial Gemini session: {model_err}", exc_info=True)
+                     return jsonify({"reply": {"textContent": "Kunde inte initiera chattsessionen.", "interactiveElement": None}}), 500
 
-            else: # Prompt updated or session missing
-                 if not session_tuple:
-                     # This log line explains the "No session found" message seen earlier
-                     logger.info(f"No session found for {user_name}. Creating new one.")
-                 else:
-                     logger.info(f"Prompt hash changed for {user_name}. Old: {session_tuple[1]}, New: {current_hash}. Creating new session.")
 
-                 # Create a new session but don't return the greeting, process the current message
-                 _ , history_for_session = build_initial_history(user_answers, user_message, user_name) # Get history structure
-                 model = get_gemini_model(user_answers)
-                 session = model.start_chat(history=history_for_session) # Use history starting with AI greeting
-                 chat_sessions[user_name] = (session, current_hash)
-                 logger.info(f"New session created for {user_name} after prompt update/missing session.")
+        # --- Generera AI-svar (om vi har en chat_session_obj) ---
+        if not chat_session_obj:
+             # Detta bör inte hända om 'start'-logiken hanteras korrekt
+             logger.error("Chat session object is unexpectedly None after session handling.")
+             return jsonify({"reply": {"textContent": "Ett oväntat sessionsfel inträffade.", "interactiveElement": None}}), 500
 
-        else: # Existing session, prompt unchanged
-            session, _ = session_tuple
-            logger.info(f"Using existing session for {user_name}")
+        logger.info(f"Sending message to Gemini: '{user_message[:50]}...'")
+        response = chat_session_obj.send_message(content=user_message)
 
-        # --- Generate AI Reply ---
-        if not session:
-             # This case might be hit if the session was lost due to multi-worker issues
-             logger.error(f"Session object is unexpectedly None for user {user_name}. This might happen with multiple workers.")
-             # Return a user-friendly error in the standard format
-             return jsonify({
-                 "reply": {
-                     "textContent": "Ursäkta, jag tappade bort vår konversation. Kan du försöka igen?",
-                     "interactiveElement": None
-                 }
-             }), 500
-
-        logger.info(f"Sending message to Gemini for {user_name}: '{user_message[:50]}...'")
-        response = session.send_message(content=user_message)
-
-        # Extract raw text reply safely
+        # Extrahera AI-svar (samma logik som tidigare)
         ai_reply_raw = ""
         try:
-            # Prioritize getting text directly if available
             if hasattr(response, 'text') and response.text is not None:
                  ai_reply_raw = response.text
-            # Fallback for potential multi-part responses
             elif hasattr(response, 'parts') and response.parts:
                  text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
                  ai_reply_raw = "\n".join(text_parts).strip()
-            # Log if the structure is completely unexpected
             else:
-                 logger.warning(f"Unexpected response structure from Gemini for {user_name}: {response}")
+                 logger.warning(f"Unexpected response structure from Gemini: {response}")
                  ai_reply_raw = "Jag kunde inte generera ett svar just nu."
-
-            # Ensure it's a string, handle potential None or empty case
-            if not ai_reply_raw:
-                ai_reply_raw = "" # Ensure it's an empty string, not None
-
+            if not ai_reply_raw: ai_reply_raw = ""
         except Exception as extract_err:
-             logger.error(f"Error extracting text from Gemini response for {user_name}: {extract_err}")
+             logger.error(f"Error extracting text from Gemini response: {extract_err}")
              ai_reply_raw = "Ett internt fel uppstod vid bearbetning av svaret."
 
+        logger.info(f"Received raw reply from Gemini: '{ai_reply_raw[:100]}...'")
 
-        logger.info(f"Received raw reply from Gemini for {user_name}: '{ai_reply_raw[:100]}...'")
+        # --- Uppdatera historiken i sessionen ---
+        # Hämta aktuell historik från Gemini-objektet (den har uppdaterats av send_message)
+        updated_history = chat_session_obj.history
+        # Uppdatera sessionen med den nya historiken
+        session['chat_context']['history'] = updated_history
+        session.modified = True # Markera att sessionen ska sparas
+        logger.info(f"Updated session history (new length: {len(updated_history)}).")
 
-    except ValueError as ve: # Handle missing API key
-        logger.error(f"Configuration error for {user_name}: {ve}")
-        return jsonify({"error": str(ve)}), 500
+    except ValueError as ve: # T.ex. saknad API-nyckel
+        logger.error(f"Configuration error: {ve}")
+        # Undvik att skicka detaljer till klienten
+        return jsonify({"reply": {"textContent": "Ett konfigurationsfel inträffade.", "interactiveElement": None}}), 500
+    except redis.exceptions.ConnectionError as redis_err:
+         logger.error(f"Redis connection error: {redis_err}", exc_info=True)
+         return jsonify({"reply": {"textContent": "Kunde inte ansluta till sessionlagringen. Försök igen senare.", "interactiveElement": None}}), 503 # Service Unavailable
     except Exception as e:
-        logger.error(f"Error during chat processing for {user_name}: {e}", exc_info=True)
-        # Provide a user-friendly error message in the standard format
-        # This is where the NameError would have been caught before the fix
+        logger.error(f"Error during chat processing: {e}", exc_info=True)
         return jsonify({
             "reply": {
                 "textContent": "Ursäkta, jag stötte på ett problem när jag försökte svara. Vänligen försök igen.",
                 "interactiveElement": None
             }
-        }), 500 # Internal Server Error
+        }), 500
 
-    # --- Parse the AI Reply ---
-    # This part should now execute without crashing
+    # --- Parsa AI-svaret och konstruera svar till frontend ---
     parsed_response = parse_ai_response(ai_reply_raw)
-    logger.info(f"Parsed response for {user_name}. Text: '{parsed_response['textContent'][:100]}...', JSON found: {parsed_response['interactiveJson'] is not None}")
+    logger.info(f"Parsed response. Text: '{parsed_response['textContent'][:100]}...', JSON found: {parsed_response['interactiveJson'] is not None}")
 
-    # --- Construct the New API Response Structure ---
     interactive_element_response = None
     if parsed_response["interactiveJson"]:
-        # Determine the 'type' from the first matching known key
         interactive_type = None
-        # --- This block now works because INTERACTIVE_KEYS is imported ---
         if isinstance(parsed_response["interactiveJson"], dict):
             for key in parsed_response["interactiveJson"]:
-                 # Check if the key exists in the imported INTERACTIVE_KEYS dict
                 if key in INTERACTIVE_KEYS:
-                    interactive_type = INTERACTIVE_KEYS[key] # Get the type string ('suggestions', 'scenario', etc.)
+                    interactive_type = INTERACTIVE_KEYS[key]
                     break
-        # ------------------------------------------------------------------
         if interactive_type:
             interactive_element_response = {
                 "type": interactive_type,
-                # Send the whole parsed JSON dict as data, frontend will handle it
                 "data": parsed_response["interactiveJson"]
             }
         else:
-            # Log if JSON was found but didn't match expected interactive structure
-            logger.warning(f"Parsed JSON for {user_name} but it did not contain a known interactive key: {list(parsed_response['interactiveJson'].keys()) if isinstance(parsed_response['interactiveJson'], dict) else 'Not a dict'}")
+            logger.warning(f"Parsed JSON did not contain a known interactive key: {list(parsed_response['interactiveJson'].keys()) if isinstance(parsed_response['interactiveJson'], dict) else 'Not a dict'}")
 
     final_response = {
         "reply": {
@@ -666,45 +601,55 @@ def chat():
     return jsonify(final_response)
 
 
-# Serve static files for images - Keep this within the blueprint if possible, or move to app.py if cleaner
-# Using app.py is generally preferred for top-level static serving.
-# If keeping here, ensure the path matches the base URL construction.
-# @ai_bp.route('/static/<path:path>')
-# def serve_static_ai(path):
-#    # This might conflict with app.py's static serving if not careful
-#    logger.info(f"AI Blueprint attempting to serve static file: {path}")
-#    # Construct path relative to the blueprint's location might be complex.
-#    # It's usually better handled by the main app instance.
-#    # return send_from_directory('static', path) # Example, likely needs adjustment
-
-
+# if __name__ == '__main__': ... (lokal körning, oförändrad, men kom ihåg att den inte testar Redis om inte Redis körs lokalt och REDIS_URL är satt)
 if __name__ == '__main__':
     # This block is for local development testing only
     from flask import Flask
     from flask_cors import CORS
+    from flask_session import Session
+    import redis
 
     app = Flask(__name__)
-    # Allow all origins for local development ease, restrict in production!
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+    # --- Local Dev Session Config ---
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'local-dev-secret')
+    local_redis_url = os.getenv('REDIS_URL')
+    if local_redis_url:
+        try:
+            app.config['SESSION_TYPE'] = 'redis'
+            app.config['SESSION_REDIS'] = redis.from_url(local_redis_url)
+            Session(app)
+            print("--- LOCAL DEV: Using REDIS sessions ---")
+        except Exception as local_redis_err:
+            print(f"--- LOCAL DEV: Failed to connect to Redis ({local_redis_url}), using filesystem sessions: {local_redis_err} ---")
+            app.config['SESSION_TYPE'] = 'filesystem'
+            app.config['SESSION_FILE_DIR'] = './.flask_session/' # Skapa denna mapp
+            if not os.path.exists('./.flask_session'):
+                os.makedirs('./.flask_session')
+            Session(app)
+    else:
+        print("--- LOCAL DEV: REDIS_URL not set, using filesystem sessions ---")
+        app.config['SESSION_TYPE'] = 'filesystem'
+        app.config['SESSION_FILE_DIR'] = './.flask_session/'
+        if not os.path.exists('./.flask_session'):
+            os.makedirs('./.flask_session')
+        Session(app)
+    # --------------------------------
+
+    CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}}) # Tillåt alla för lokal dev
     app.register_blueprint(ai_bp)
 
-    # Serve static files for images (needed for local dev if URLs point here)
     @app.route('/static/<path:path>')
     def serve_static_local(path):
-        # Assuming static is in the same directory as ai.py when run directly
         static_dir = os.path.join(os.path.dirname(__file__), 'static')
         logger.info(f"Dev server serving static file: {path} from {static_dir}")
         return send_from_directory(static_dir, path)
 
-    # Använd PORT miljövariabeln för Render eller 10000 som standard
     port = int(os.environ.get('PORT', 10000))
-    # Ensure the static folder exists
     static_images_dir_local = os.path.join(os.path.dirname(__file__), 'static', 'images')
     if not os.path.exists(static_images_dir_local):
          os.makedirs(static_images_dir_local, exist_ok=True)
          print(f"Created directory for local dev: {static_images_dir_local}")
 
     print(f"Starting development server on http://0.0.0.0:{port}")
-    # Set debug=True only for local development
-    # Run with only one worker process for local testing to avoid session issues
     app.run(host='0.0.0.0', port=port, debug=True, threaded=False, processes=1)
