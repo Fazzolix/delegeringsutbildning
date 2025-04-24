@@ -8,7 +8,8 @@ import sqlite3
 from ai import ai_bp
 from dotenv import load_dotenv
 import logging
-from urllib.parse import urlparse
+# urllib.parse behövs inte längre för domain-logik
+# from urllib.parse import urlparse
 
 # Konfigurera loggning
 logging.basicConfig(level=logging.INFO,
@@ -49,30 +50,12 @@ else:
         logger.error(f"Error creating Redis client: {e}")
         app.config['SESSION_REDIS'] = None
 
-# *** Explicit Cookie-konfiguration (med manuellt satt domän) ***
+# *** Cookie-konfiguration UTAN explicit Domain ***
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_PATH'] = '/'
-
-# --- Manuell inställning av Cookie Domain ---
-# Eftersom både frontend och backend är på *.onrender.com, sätter vi domänen manuellt.
-# Kontrollera om vi verkar köra på Render baserat på URL:erna
-frontend_url_str = os.getenv('FRONTEND_URL', '')
-backend_url_str = os.getenv('BACKEND_URL', '')
-# Enkel kontroll om båda URL:erna innehåller onrender.com
-IS_ON_RENDER = "onrender.com" in frontend_url_str and "onrender.com" in backend_url_str
-
-if IS_ON_RENDER:
-    # VIKTIGT: Sätt med ledande punkt för att täcka alla subdomäner
-    app.config['SESSION_COOKIE_DOMAIN'] = ".onrender.com"
-    logger.info(f"Manually setting SESSION_COOKIE_DOMAIN to: .onrender.com")
-else:
-    # Om vi inte är på Render (t.ex. localhost), sätt inte domänen alls (None)
-    # så binds den till localhost/127.0.0.1, vilket är korrekt där.
-    app.config['SESSION_COOKIE_DOMAIN'] = None
-    logger.info("Not running on Render (based on URLs), setting SESSION_COOKIE_DOMAIN to None.")
-# ---------------------------------------
+# Ingen app.config['SESSION_COOKIE_DOMAIN'] här, låt den vara default (None)
 
 # Logga slutgiltiga cookie-inställningar
 logger.info(
@@ -80,7 +63,7 @@ logger.info(
     f"Secure={app.config.get('SESSION_COOKIE_SECURE')}, "
     f"SameSite={app.config.get('SESSION_COOKIE_SAMESITE')}, "
     f"Path={app.config.get('SESSION_COOKIE_PATH')}, "
-    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}"
+    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}" # Bör nu logga Default (None)
 )
 
 # Initiera Flask-Session
@@ -97,11 +80,12 @@ if frontend_url_from_env:
     cors_origins.append(frontend_url_from_env)
 else:
     logger.warning("FRONTEND_URL environment variable not set, CORS might not allow frontend requests.")
-cors_origins.append("http://localhost:3000") # Tillåt alltid localhost för dev
+cors_origins.append("http://localhost:3000")
 
 logger.info(f"Configuring CORS for origins: {cors_origins}")
 CORS(app, supports_credentials=True, origins=cors_origins)
 # -------------------------
+
 
 # ----- Resten av app.py (databaskod, routes, etc.) är oförändrad -----
 
@@ -118,7 +102,6 @@ def init_db():
             c = conn.cursor()
             c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)')
             conn.commit()
-        #logger.info("Database initialized successfully.") # Ta bort lite spam
     except sqlite3.Error as e:
         logger.error(f"Database error during initialization: {e}")
 
@@ -139,7 +122,7 @@ def serve_static_files(filename):
 
 @app.route('/')
 def index():
-    return jsonify({"message": "Backend API running with Redis sessions, manual domain cookie."})
+    return jsonify({"message": "Backend API running - attempting default cookie domain."})
 
 # API endpoint to save user name
 @app.route('/api/user', methods=['POST'])
