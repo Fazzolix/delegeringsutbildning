@@ -14,8 +14,8 @@ from flask import Blueprint, request, jsonify, send_from_directory # Added send_
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# Importera den nya parsing-funktionen
-from parsing_utils import parse_ai_response
+# Importera den nya parsing-funktionen OCH INTERACTIVE_KEYS
+from parsing_utils import parse_ai_response, INTERACTIVE_KEYS # <-- FIX: Added INTERACTIVE_KEYS here
 
 # Ladda miljövariabler
 load_dotenv()
@@ -39,6 +39,8 @@ if not GEMINI_API_KEY:
 
 # Global dictionary för att lagra chatt-sessioner per användare
 # Sparas som: {user_name: (session, prompt_hash)}
+# OBS: Detta fungerar inte tillförlitligt med flera Gunicorn workers.
+# Se kommentar nedan.
 chat_sessions = {}
 
 # Global promptkonfiguration (behålls för prompt-byggnad)
@@ -533,10 +535,13 @@ def chat():
                 if parsed_greeting.get("interactiveJson"):
                     # Determine the type based on keys in the parsed JSON
                     interactive_type = None
-                    for key in parsed_greeting["interactiveJson"]:
-                        if key in INTERACTIVE_KEYS:
-                            interactive_type = INTERACTIVE_KEYS[key]
-                            break
+                    # --- This block now works because INTERACTIVE_KEYS is imported ---
+                    if isinstance(parsed_greeting["interactiveJson"], dict):
+                        for key in parsed_greeting["interactiveJson"]:
+                            if key in INTERACTIVE_KEYS:
+                                interactive_type = INTERACTIVE_KEYS[key]
+                                break
+                    # ------------------------------------------------------------------
                     if interactive_type:
                          interactive_element = {
                             "type": interactive_type,
@@ -552,6 +557,7 @@ def chat():
 
             else: # Prompt updated or session missing
                  if not session_tuple:
+                     # This log line explains the "No session found" message seen earlier
                      logger.info(f"No session found for {user_name}. Creating new one.")
                  else:
                      logger.info(f"Prompt hash changed for {user_name}. Old: {session_tuple[1]}, New: {current_hash}. Creating new session.")
@@ -569,9 +575,15 @@ def chat():
 
         # --- Generate AI Reply ---
         if not session:
-             # This case should ideally not be reached due to the logic above
-             logger.error(f"Session object is unexpectedly None for user {user_name}")
-             return jsonify({"error": "Chat session not available."}), 500
+             # This case might be hit if the session was lost due to multi-worker issues
+             logger.error(f"Session object is unexpectedly None for user {user_name}. This might happen with multiple workers.")
+             # Return a user-friendly error in the standard format
+             return jsonify({
+                 "reply": {
+                     "textContent": "Ursäkta, jag tappade bort vår konversation. Kan du försöka igen?",
+                     "interactiveElement": None
+                 }
+             }), 500
 
         logger.info(f"Sending message to Gemini for {user_name}: '{user_message[:50]}...'")
         response = session.send_message(content=user_message)
@@ -579,14 +591,22 @@ def chat():
         # Extract raw text reply safely
         ai_reply_raw = ""
         try:
-            if hasattr(response, 'text'):
-                 ai_reply_raw = response.text or ""
+            # Prioritize getting text directly if available
+            if hasattr(response, 'text') and response.text is not None:
+                 ai_reply_raw = response.text
+            # Fallback for potential multi-part responses
             elif hasattr(response, 'parts') and response.parts:
                  text_parts = [part.text for part in response.parts if hasattr(part, 'text') and part.text]
                  ai_reply_raw = "\n".join(text_parts).strip()
+            # Log if the structure is completely unexpected
             else:
                  logger.warning(f"Unexpected response structure from Gemini for {user_name}: {response}")
                  ai_reply_raw = "Jag kunde inte generera ett svar just nu."
+
+            # Ensure it's a string, handle potential None or empty case
+            if not ai_reply_raw:
+                ai_reply_raw = "" # Ensure it's an empty string, not None
+
         except Exception as extract_err:
              logger.error(f"Error extracting text from Gemini response for {user_name}: {extract_err}")
              ai_reply_raw = "Ett internt fel uppstod vid bearbetning av svaret."
@@ -600,6 +620,7 @@ def chat():
     except Exception as e:
         logger.error(f"Error during chat processing for {user_name}: {e}", exc_info=True)
         # Provide a user-friendly error message in the standard format
+        # This is where the NameError would have been caught before the fix
         return jsonify({
             "reply": {
                 "textContent": "Ursäkta, jag stötte på ett problem när jag försökte svara. Vänligen försök igen.",
@@ -608,6 +629,7 @@ def chat():
         }), 500 # Internal Server Error
 
     # --- Parse the AI Reply ---
+    # This part should now execute without crashing
     parsed_response = parse_ai_response(ai_reply_raw)
     logger.info(f"Parsed response for {user_name}. Text: '{parsed_response['textContent'][:100]}...', JSON found: {parsed_response['interactiveJson'] is not None}")
 
@@ -616,18 +638,23 @@ def chat():
     if parsed_response["interactiveJson"]:
         # Determine the 'type' from the first matching known key
         interactive_type = None
+        # --- This block now works because INTERACTIVE_KEYS is imported ---
         if isinstance(parsed_response["interactiveJson"], dict):
             for key in parsed_response["interactiveJson"]:
+                 # Check if the key exists in the imported INTERACTIVE_KEYS dict
                 if key in INTERACTIVE_KEYS:
-                    interactive_type = INTERACTIVE_KEYS[key]
+                    interactive_type = INTERACTIVE_KEYS[key] # Get the type string ('suggestions', 'scenario', etc.)
                     break
+        # ------------------------------------------------------------------
         if interactive_type:
             interactive_element_response = {
                 "type": interactive_type,
-                "data": parsed_response["interactiveJson"] # Send the whole parsed JSON dict as data
+                # Send the whole parsed JSON dict as data, frontend will handle it
+                "data": parsed_response["interactiveJson"]
             }
         else:
-            logger.warning(f"Parsed JSON for {user_name} did not contain a known interactive key.")
+            # Log if JSON was found but didn't match expected interactive structure
+            logger.warning(f"Parsed JSON for {user_name} but it did not contain a known interactive key: {list(parsed_response['interactiveJson'].keys()) if isinstance(parsed_response['interactiveJson'], dict) else 'Not a dict'}")
 
     final_response = {
         "reply": {
@@ -637,9 +664,6 @@ def chat():
     }
 
     return jsonify(final_response)
-
-
-# Prompt Editor endpoint är borttagen.
 
 
 # Serve static files for images - Keep this within the blueprint if possible, or move to app.py if cleaner
@@ -682,4 +706,5 @@ if __name__ == '__main__':
 
     print(f"Starting development server on http://0.0.0.0:{port}")
     # Set debug=True only for local development
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Run with only one worker process for local testing to avoid session issues
+    app.run(host='0.0.0.0', port=port, debug=True, threaded=False, processes=1)
