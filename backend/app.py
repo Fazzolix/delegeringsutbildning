@@ -1,6 +1,6 @@
 # backend/app.py
 import os
-from flask import Flask, jsonify, request, send_from_directory, session
+from flask import Flask, jsonify, request, send_from_directory, session # Importera session
 from flask_cors import CORS
 from flask_session import Session
 import redis
@@ -8,8 +8,7 @@ import sqlite3
 from ai import ai_bp
 from dotenv import load_dotenv
 import logging
-# urllib.parse behövs inte längre för domain-logik
-# from urllib.parse import urlparse
+# from urllib.parse import urlparse # Behövs ej längre
 
 # Konfigurera loggning
 logging.basicConfig(level=logging.INFO,
@@ -25,7 +24,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # Initialize Flask app
 app = Flask(__name__, static_folder=os.path.join(basedir, 'static'))
 
-# --- Flask-Session Configuration ---
+# --- Flask-Session Configuration (Samma som förra, utan domain-logik) ---
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 if not app.config['SECRET_KEY']:
     logger.error("FATAL: SECRET_KEY environment variable is not set!")
@@ -50,23 +49,20 @@ else:
         logger.error(f"Error creating Redis client: {e}")
         app.config['SESSION_REDIS'] = None
 
-# *** Cookie-konfiguration UTAN explicit Domain ***
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_PATH'] = '/'
-# Ingen app.config['SESSION_COOKIE_DOMAIN'] här, låt den vara default (None)
+app.config['SESSION_COOKIE_DOMAIN'] = None # Explicit satt till None (default)
 
-# Logga slutgiltiga cookie-inställningar
 logger.info(
     f"Final cookie settings before Session init: "
     f"Secure={app.config.get('SESSION_COOKIE_SECURE')}, "
     f"SameSite={app.config.get('SESSION_COOKIE_SAMESITE')}, "
     f"Path={app.config.get('SESSION_COOKIE_PATH')}, "
-    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}" # Bör nu logga Default (None)
+    f"Domain={app.config.get('SESSION_COOKIE_DOMAIN', 'Default (None)')}"
 )
 
-# Initiera Flask-Session
 if app.config.get('SESSION_REDIS'):
     Session(app)
     logger.info("Flask-Session initialized with Redis backend.")
@@ -76,40 +72,32 @@ else:
 # --- CORS Configuration ---
 cors_origins = []
 frontend_url_from_env = os.getenv('FRONTEND_URL')
-if frontend_url_from_env:
-    cors_origins.append(frontend_url_from_env)
-else:
-    logger.warning("FRONTEND_URL environment variable not set, CORS might not allow frontend requests.")
+if frontend_url_from_env: cors_origins.append(frontend_url_from_env)
+else: logger.warning("FRONTEND_URL environment variable not set, CORS might not allow frontend requests.")
 cors_origins.append("http://localhost:3000")
 
 logger.info(f"Configuring CORS for origins: {cors_origins}")
 CORS(app, supports_credentials=True, origins=cors_origins)
 # -------------------------
 
-
-# ----- Resten av app.py (databaskod, routes, etc.) är oförändrad -----
-
-# Define an absolute path to the database
 db_path = os.path.join(basedir, 'database.db')
-
-# Register AI blueprint
 app.register_blueprint(ai_bp)
 
-# Initialize the database
 def init_db():
-    try:
+    # ... (samma som förut) ...
+     try:
         with sqlite3.connect(db_path) as conn:
             c = conn.cursor()
             c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)')
             conn.commit()
-    except sqlite3.Error as e:
+     except sqlite3.Error as e:
         logger.error(f"Database error during initialization: {e}")
 
 init_db()
 
-# Serve static files
 @app.route('/static/<path:filename>')
 def serve_static_files(filename):
+    # ... (samma som förut) ...
     static_dir = app.static_folder
     try:
         return send_from_directory(static_dir, filename)
@@ -122,7 +110,7 @@ def serve_static_files(filename):
 
 @app.route('/')
 def index():
-    return jsonify({"message": "Backend API running - attempting default cookie domain."})
+    return jsonify({"message": "Backend API running - attempting default cookie domain, session cleared on user save."})
 
 # API endpoint to save user name
 @app.route('/api/user', methods=['POST'])
@@ -137,9 +125,13 @@ def save_user():
             c = conn.cursor()
             c.execute('INSERT INTO users (name) VALUES (?)', (name,))
             conn.commit()
-        session['user_saved'] = name
-        session.modified = True
-        logger.info(f"User name saved: {name}. Test session value set.")
+
+        # *** ÄNDRING: Rensa chattkontexten när användare sparas ***
+        session.pop('chat_context', None)
+        logger.info(f"User name saved: {name}. Cleared any existing chat context from session.")
+        # Vi behöver inte sätta 'user_saved' längre, rensningen är viktigare.
+        session.modified = True # Markera att sessionen ändrats (rensats)
+
         return jsonify({'message': 'Name saved successfully!'})
     except sqlite3.Error as e:
         logger.error(f"Database error saving user {name}: {e}")
@@ -149,12 +141,12 @@ def save_user():
         return jsonify({'error': 'An unexpected error occurred'}), 500
 
 if __name__ == '__main__':
-    static_images_dir = os.path.join(basedir, 'static', 'images')
-    if not os.path.exists(static_images_dir):
-         os.makedirs(static_images_dir, exist_ok=True)
-         logger.info(f"Created directory: {static_images_dir}")
+    # ... (samma lokala körningskod som i förra svaret) ...
+     static_images_dir = os.path.join(basedir, 'static', 'images')
+     if not os.path.exists(static_images_dir):
+          os.makedirs(static_images_dir, exist_ok=True)
 
-    port = int(os.environ.get('PORT', 10000))
-    is_debug = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1')
-    logger.info(f"Starting Flask server on host 0.0.0.0, port {port}, Debug: {is_debug}")
-    app.run(host='0.0.0.0', port=port, debug=is_debug)
+     port = int(os.environ.get('PORT', 10000))
+     is_debug = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1')
+     logger.info(f"Starting Flask server on host 0.0.0.0, port {port}, Debug: {is_debug}")
+     app.run(host='0.0.0.0', port=port, debug=is_debug)
