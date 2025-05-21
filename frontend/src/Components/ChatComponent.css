@@ -1301,3 +1301,18 @@
       padding: 8px 0;
     }
   }
+
+/* In ChatComponent.css, can be added towards the end or near .animate-in-paragraph */
+.animate-in-paragraph.single-code-block {
+  animation: fadeInCodeBlock 0.1s ease-out forwards; /* 'forwards' keeps the state of the last keyframe */
+}
+
+@keyframes fadeInCodeBlock {
+  from { 
+    opacity: 0;
+    /* No transformY needed if we want it to appear in place */
+  }
+  to { 
+    opacity: 1; 
+  }
+}
