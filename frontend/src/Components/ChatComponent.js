@@ -452,8 +452,8 @@ const QuickResponseButtons = ({ onSendQuickResponse, disabled }) => {
   const [activeIndex, setActiveIndex] = useState(null);
   const quickResponses = [
     { text: "Berätta mer om detta", icon: "🔍" },
-    { text: "Jag förstår inte", icon: "❓" },
-    { text: "Fortsätt", icon: "➡️" }
+    { text: "Jag förstår inte", icon: "❓" }
+    // { text: "Fortsätt", icon: "➡️" } // Removed as per instructions
   ];
 
   const handleClick = (text, index) => {

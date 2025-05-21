@@ -6,10 +6,10 @@
 }
 
 body {
-  font-family: 'Roboto', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  /* font-family will be inherited from index.css */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: #f7f7f8; /* Solid light gray background */
   height: 100vh;
   width: 100vw;
   overflow-x: hidden;
@@ -45,7 +45,7 @@ body {
 /* Responsiva justeringar */
 @media (max-width: 768px) {
   body {
-    background: #f5f7fa;
+    background: #f7f7f8; /* Solid light gray background for mobile */
   }
   
   .App {
@@ -68,12 +68,12 @@ img {
 
 /* För code blocks i Markdown */
 pre {
-  background: #f8f9fa;
-  padding: 15px;
+  background: #f8f9fa; /* Light gray background for code blocks */
+  padding: 12px; /* Adjusted padding */
   border-radius: 8px;
   overflow-x: auto;
   margin: 10px 0;
-  border-left: 3px solid #4e73df;
+  border-left: 3px solid #007bff; /* New primary accent color */
 }
 
 code {
@@ -104,7 +104,7 @@ li {
 
 /* Huvudrubriker i Markdown */
 h1, h2, h3, h4, h5, h6 {
-  color: #2c3e50;
+  color: #333333; /* Neutral dark gray for headings */
   margin: 15px 0 10px 0;
 }
 
